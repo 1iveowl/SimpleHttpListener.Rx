@@ -10,6 +10,7 @@ namespace HttpListener.Rx.Model.Base
         public IDictionary<string, string> Headers { get; set; } = new Dictionary<string, string>();
 
         public Stream ResponseStream { get; set; }
-        //public TcpClient TcpClientRx { get; set; }
+
+        public TcpClient TcpClient { get; set; }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using System.Net.Sockets;
 using HttpListener.Rx.Model.Base;
 using HttpMachine;
 
@@ -19,6 +20,6 @@ namespace HttpListener.Rx.Model
         public string QueryString { get; set; }
         public string Fragment { get; set; }
         public bool IsChunked { get; set; }
-        public MemoryStream Body { get; set; } = new MemoryStream();       
+        public MemoryStream Body { get; set; } = new MemoryStream();
     }
 }

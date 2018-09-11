@@ -20,5 +20,7 @@ namespace IHttpListener.Rx.Model
         string RemoteAddress { get; }
 
         Stream ResponseStream { get; }
+
+        TcpClient TcpClient { get; }
     }
 }

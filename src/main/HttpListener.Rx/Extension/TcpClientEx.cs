@@ -57,7 +57,7 @@ namespace HttpListener.Rx.Extension
         private static IObservable<byte[]> CreateByteStreamObservable(Stream stream, CancellationToken ct)
         {
             return Observable.While(
-                () => !ct.IsCancellationRequested, 
+                () => !ct.IsCancellationRequested,
                 Observable.FromAsync(() => ReadOneByteAtTheTimeAsync(stream)));
         }
 
@@ -87,6 +87,10 @@ namespace HttpListener.Rx.Extension
             catch (ObjectDisposedException)
             {
                 Debug.WriteLine("Ignoring Object Disposed Exception - This is an expected exception.");
+            }
+            catch (IOException)
+            {
+                // Ignore
             }
             return oneByteArray;
         }

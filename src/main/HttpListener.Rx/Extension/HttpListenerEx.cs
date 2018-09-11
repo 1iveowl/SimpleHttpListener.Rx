@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
+using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
@@ -27,10 +28,12 @@ namespace HttpListener.Rx.Extension
                         RequestType = RequestType.TCP
                     };
 
-                    var requestHandler = new HttpParserDelegate(requestResponseObj);
-                    var httpStreamParser = new HttpStreamParser();
+                    using (var requestHandler = new HttpParserDelegate(requestResponseObj))
+                    using (var httpStreamParser = new HttpStreamParser())
                     {
-                        return  httpStreamParser.Parse(requestHandler, stream);
+                        var result = httpStreamParser.Parse(requestHandler, stream);
+
+                        return result;
                     }
                 });
         }

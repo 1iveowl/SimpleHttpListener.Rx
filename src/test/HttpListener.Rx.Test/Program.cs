@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
@@ -34,7 +35,8 @@ namespace HttpListener.Rx.Test
 
             var cts = new CancellationTokenSource();
 
-            var disposable = tcpListener.ToHttpTcpServerObservable(cts.Token)
+            var disposable = tcpListener
+                .ToHttpTcpServerObservable(cts.Token)
                 .Do(r =>
                 {
                     Console.WriteLine($"Remote Address: {r.RemoteAddress}");
@@ -43,19 +45,18 @@ namespace HttpListener.Rx.Test
                 })
                 .Select(r => Observable.FromAsync(() => SendResponseAsync(r, httpSender)))
                 .Concat()
-                .Subscribe(
-                r =>
-                {
-
-                },
-                ex =>
-                {
-
-                },
-                () =>
-                {
-
-                });
+                .Subscribe(r =>
+                    {
+                        var t = "";
+                    },
+                    ex =>
+                    {
+                        var t = "";
+                    },
+                    () =>
+                    {
+                        var c = "";
+                    });
             
         }
 

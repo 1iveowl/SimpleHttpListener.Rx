@@ -13,5 +13,6 @@ namespace HttpListener.Rx.Model
         public string ResponseReason { get; set; }
         
         public MemoryStream Body { get; set; } = new MemoryStream();
+
     }
 }

@@ -17,7 +17,8 @@ namespace HttpListener.Rx.Parser
             using (var cts = new CancellationTokenSource())
             {
               
-                _disposableParser = stream.ToByteStreamObservable(cts.Token)
+                _disposableParser = stream.
+                    ToByteStreamObservable(cts.Token)
                     .Subscribe(
                     bArray =>
                     {

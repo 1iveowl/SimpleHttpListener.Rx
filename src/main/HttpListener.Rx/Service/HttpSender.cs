@@ -23,6 +23,11 @@ namespace HttpListener.Rx.Service
                     if (writeStream?.CanWrite ?? false)
                     {
                         await writeStream.WriteAsync(bArray, 0, bArray.Length);
+                        await writeStream.FlushAsync();
+
+                        //request.TcpClient.Dispose();
+
+                        //writeStream.Dispose();
                         //await writeStream.FlushAsync();
 
                         //response.TcpClientRx?.Dispose();
