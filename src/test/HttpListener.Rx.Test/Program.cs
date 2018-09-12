@@ -29,9 +29,12 @@ namespace HttpListener.Rx.Test
             var httpSender = new HttpSender();
             var uri = new Uri("http://192.168.0.59:8000");
 
-            var tcpListener = new TcpListener(uri.Host.GetIPv4Address(), uri.Port);
+            var tcpListener = new TcpListener(uri.Host.GetIPv4Address(), uri.Port)
+            {
+                ExclusiveAddressUse = false
+            };
 
-            tcpListener.Start();
+            //tcpListener.Start();
 
             var cts = new CancellationTokenSource();
 
@@ -76,7 +79,7 @@ namespace HttpListener.Rx.Test
                     Body = new MemoryStream(Encoding.UTF8.GetBytes($"<html>\r\n<body>\r\n<h1>Hello, World! {DateTime.Now}</h1>\r\n</body>\r\n</html>"))
                 };
 
-                await httpSender.SendResponseAsync(request, response);
+                await httpSender.SendResponseAsync(request, response).ConfigureAwait(false);
             }
         }
     }

@@ -12,12 +12,6 @@ namespace HttpListener.Rx.Parser
     {
         private readonly IObserver<ParserState> _observerParserState;
 
-        internal void StopParsing()
-        {
-            _observerParserState.OnNext(ParserState.Failed);
-            _observerParserState.OnError(new Exception("Parser stopped prematurely"));
-        }
-
         internal IObservable<ParserState> ParserCompletionObservable { get; }
 
         public HttpRequestResponse RequestResponse { get; }

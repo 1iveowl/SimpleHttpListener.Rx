@@ -1,4 +1,6 @@
-﻿namespace IHttpListener.Rx.Model
+﻿using System.Threading;
+
+namespace IHttpListener.Rx.Model
 {
     public interface IHttpRequest : IParseControl, IHttpCommon
     {

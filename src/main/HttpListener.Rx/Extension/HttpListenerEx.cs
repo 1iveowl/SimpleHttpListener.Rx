@@ -1,41 +1,42 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net.Sockets;
-using System.Reactive.Concurrency;
 using System.Reactive.Linq;
-using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using HttpListener.Rx.Model;
 using HttpListener.Rx.Parser;
 using IHttpListener.Rx.Enum;
-using IHttpListener.Rx.Model;
 
 namespace HttpListener.Rx.Extension
 {
     public static class HttpListenerEx
     {
-        public static IObservable<IHttpRequestResponse> ToHttpTcpServerObservable(this TcpListener tcpListener, CancellationToken ct)
+        public static IObservable<IHttpRequestResponse> ToHttpTcpServerObservable(this TcpListener tcpListener, CancellationToken outerCancellationToken)
         {
-            return tcpListener.ToObservable(ct)
+            return tcpListener.ToObservable(outerCancellationToken)
                 .Where(tcpClient => tcpClient != null)
                 .Select(tcpClient =>
                 {
                     var stream = tcpClient.GetStream();
 
-                    var requestResponseObj = new HttpRequestResponse
+                    return new HttpRequestResponse
                     {
-                        ResponseStream = tcpClient.GetStream(),
-                        RequestType = RequestType.TCP
+                        ResponseStream = stream,
+                        RequestType = RequestType.TCP,
+                        TcpClient = tcpClient
                     };
+                })
+                .Select(httpObj => Observable.FromAsync(ct => ParseAsync(httpObj, ct)))
+                .Concat();
+        }
 
-                    using (var requestHandler = new HttpParserDelegate(requestResponseObj))
-                    using (var httpStreamParser = new HttpStreamParser())
-                    {
-                        var result = httpStreamParser.Parse(requestHandler, stream);
-
-                        return result;
-                    }
-                });
+        private static async Task<IHttpRequestResponse> ParseAsync(HttpRequestResponse requestResponseObj, CancellationToken ct)
+        {
+            using (var requestHandler = new HttpParserDelegate(requestResponseObj))
+            using (var httpStreamParser = new HttpStreamParser(requestHandler))
+            {
+                return await httpStreamParser.ParseAsync(requestResponseObj.ResponseStream, ct);
+            }
         }
     }
 }

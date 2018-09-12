@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Net.Sockets;
+using System.Threading;
 using HttpListener.Rx.Model.Base;
 using HttpMachine;
 
@@ -19,6 +20,7 @@ namespace HttpListener.Rx.Model
         public string Path { get; set; }
         public string QueryString { get; set; }
         public string Fragment { get; set; }
+        public CancellationTokenSource CancellationTokenSource { get; internal set; }
         public bool IsChunked { get; set; }
         public MemoryStream Body { get; set; } = new MemoryStream();
     }
