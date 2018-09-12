@@ -27,7 +27,7 @@ namespace HttpListener.Rx.Extension
                         ResponseStream = stream,
                         RequestType = RequestType.TCP,
                         TcpClient = tcpClient,
-                        RemoteAddress = remoteEndPoint?.Address.ToString(),
+                        RemoteAddress = remoteEndPoint?.Address?.ToString(),
                         RemotePort = remoteEndPoint?.Port ?? 0
                     };
                 })

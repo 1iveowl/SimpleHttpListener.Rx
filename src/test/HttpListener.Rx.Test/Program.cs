@@ -33,8 +33,6 @@ namespace HttpListener.Rx.Test
                 ExclusiveAddressUse = false
             };
 
-            //tcpListener.Start();
-
             var cts = new CancellationTokenSource();
 
             var disposable = tcpListener
@@ -48,18 +46,17 @@ namespace HttpListener.Rx.Test
                 .Select(r => Observable.FromAsync(() => SendResponseAsync(r, httpSender)))
                 .Concat()
                 .Subscribe(r =>
-                    {
-                        
-                    },
-                    ex =>
-                    {
-                        
-                    },
-                    () =>
-                    {
-                        
-                    });
-            
+                {
+                    
+                },
+                ex =>
+                {
+                    
+                },
+                () =>
+                {
+                    
+                });
         }
 
         static async Task SendResponseAsync(IHttpRequestResponse request, HttpSender httpSender)
