@@ -16,7 +16,6 @@ namespace HttpListener.Rx.Extension
             return Observable.While(
                 () => !ct.IsCancellationRequested,
                 Observable.FromAsync(x => WaitForNextRequestAsync(tcpListener)));
-            //.Do(x => Debug.WriteLine("Request received."));
         }
 
         private static async Task<TcpClient> WaitForNextRequestAsync(TcpListener tcpListener)

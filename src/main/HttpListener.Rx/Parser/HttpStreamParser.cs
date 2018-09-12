@@ -63,7 +63,6 @@ namespace HttpListener.Rx.Parser
             _requestHandler.RequestResponse.MinorVersion = _parserHandler.MinorVersion;
             _requestHandler.RequestResponse.ShouldKeepAlive = _parserHandler.ShouldKeepAlive;
 
-
             return _requestHandler.RequestResponse;
         }
 

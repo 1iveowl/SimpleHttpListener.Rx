@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net;
 using System.Net.Sockets;
 using System.Reactive.Linq;
 using System.Threading;
@@ -19,11 +20,15 @@ namespace HttpListener.Rx.Extension
                 {
                     var stream = tcpClient.GetStream();
 
+                    var remoteEndPoint = tcpClient.Client.RemoteEndPoint as IPEndPoint;
+
                     return new HttpRequestResponse
                     {
                         ResponseStream = stream,
                         RequestType = RequestType.TCP,
-                        TcpClient = tcpClient
+                        TcpClient = tcpClient,
+                        RemoteAddress = remoteEndPoint?.Address.ToString(),
+                        RemotePort = remoteEndPoint?.Port ?? 0
                     };
                 })
                 .Select(httpObj => Observable.FromAsync(ct => ParseAsync(httpObj, ct)))

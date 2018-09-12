@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Reactive.Concurrency;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
@@ -50,15 +49,15 @@ namespace HttpListener.Rx.Test
                 .Concat()
                 .Subscribe(r =>
                     {
-                        var t = "";
+                        
                     },
                     ex =>
                     {
-                        var t = "";
+                        
                     },
                     () =>
                     {
-                        var c = "";
+                        
                     });
             
         }
