@@ -7,10 +7,10 @@ using System.Reactive.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using HttpListener.Rx.Extension;
-using HttpListener.Rx.Model;
-using HttpListener.Rx.Service;
-using IHttpListener.Rx.Enum;
+using ISimpleHttpListener.Rx.Enum;
+using SimpleHttpListener.Rx.Extension;
+using SimpleHttpListener.Rx.Model;
+using SimpleHttpListener.Rx.Service;
 
 namespace HttpListener.Rx.Test
 {
