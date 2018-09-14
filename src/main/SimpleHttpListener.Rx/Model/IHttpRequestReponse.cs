@@ -6,5 +6,7 @@ namespace SimpleHttpListener.Rx.Model
     public interface IHttpRequestResponse : IHttpResponse, IHttpRequest
     {
         MessageType MessageType { get; }
+
+        bool HasParsingErrors { get; }
     }
 }

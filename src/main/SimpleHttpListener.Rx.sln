@@ -13,7 +13,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{C0FC7577-3
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{1DE3FF56-95E1-4BD4-A365-0585FFE96E8B}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HttpListener.Rx.Test", "..\test\HttpListener.Rx.Test\HttpListener.Rx.Test.csproj", "{6DC64468-7CB0-4D81-8785-6257A2A052B1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleHttpListener.Rx.Test", "..\test\HttpListener.Rx.Test\SimpleHttpListener.Rx.Test.csproj", "{6DC64468-7CB0-4D81-8785-6257A2A052B1}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ISimpleHttpListener.Rx", "..\interface\ISimpleHttpListener.Rx\ISimpleHttpListener.Rx.csproj", "{6C16FE10-68B8-4A9F-BFE0-68E71C718A5C}"
 EndProject

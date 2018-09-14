@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using ISimpleHttpListener.Rx.Enum;
@@ -10,7 +11,7 @@ namespace SimpleHttpListener.Rx.Service
 {
     public class HttpSender
     {
-        public async Task SendResponseAsync(IHttpRequest request, IHttpResponse response)
+        public async Task SendTcpResponseAsync(IHttpRequest request, IHttpResponse response)
         {
             if (request.RequestType == RequestType.TCP)
             {
@@ -31,6 +32,13 @@ namespace SimpleHttpListener.Rx.Service
                 }
             }
         }
+
+        //public async Task SendOnMulticast(UdpClient udpClient, byte[] data)
+        //{
+        //    await udpClient.SendAsync(data, data.Length, )
+        //    //await _udpMultiCastListener.SendMulticastAsync(data);
+        //}
+
 
         private byte[] ComposeResponse(IHttpRequest request, IHttpResponse response)
         {

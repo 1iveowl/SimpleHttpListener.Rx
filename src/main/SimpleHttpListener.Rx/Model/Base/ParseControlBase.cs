@@ -13,6 +13,8 @@ namespace SimpleHttpListener.Rx.Model.Base
 
         public bool IsUnableToParseHttp { get; set; }
 
+        public bool HasParsingErrors { get; set; }
+
         public string RemoteAddress { get; set; }
 
         public int RemotePort { get; set; }

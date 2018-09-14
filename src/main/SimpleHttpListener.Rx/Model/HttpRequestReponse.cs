@@ -8,6 +8,7 @@ namespace SimpleHttpListener.Rx.Model
     public class HttpRequestResponse : HttpHeaderBase, IHttpRequestResponse
     {
         public MessageType MessageType { get; set; }
+       
         public int StatusCode { get; set; }
         public string ResponseReason { get; set; }
         public int MajorVersion { get; set; }

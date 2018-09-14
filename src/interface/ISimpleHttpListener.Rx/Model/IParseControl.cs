@@ -7,5 +7,7 @@
         bool IsRequestTimedOut { get; }
 
         bool IsUnableToParseHttp { get; }
+
+        bool HasParsingErrors { get; }
     }
 }
