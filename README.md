@@ -35,7 +35,7 @@ using SimpleHttpListener.Rx.Service;
 ### TCP HTTP Listener
 For a simple TCP based HTTP Listner see this example.
 
-Notice that it is [bad practice](https://stackoverflow.com/a/37131023/4140832) to create an async Suscriber - i.e. `.Subscribe(async x => ...)`. To avoid create a `.Select(r => Observable.FromAsync(() => ...).Concat` instead.
+Notice that it is [bad practice](https://stackoverflow.com/a/37131023/4140832) to create an async Suscriber - i.e. `.Subscribe(async x => ...)`. To avoid create a `.Select(r => Observable.FromAsync(() => ...).Concat` instead as in the example below.
 
 ```csharp
 
@@ -67,7 +67,6 @@ static void TcpListenerTest()
         .Subscribe(r =>
         {
             Console.WriteLine("Reply sent.");
-        })
         },
         ex =>
         {
