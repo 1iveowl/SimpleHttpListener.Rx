@@ -1,8 +1,11 @@
 # Simple Http Listener Rx
 
-[![NuGet Badge](https://buildstats.info/nuget/SimpleHttpListener)](https://www.nuget.org/packages/SimpleHttpListener.Rx/)
 
-[![.NET Standard](http://img.shields.io/badge/.NET_Standard-v2.0-green.svg)](https://docs.microsoft.com/da-dk/dotnet/articles/standard/library)
+[![NuGet Badge](https://buildstats.info/nuget/SimpleHttpListener.Rx)](https://www.nuget.org/packages/SimpleHttpListener.Rx/)
+
+Previous versions:
+
+[![NuGet Badge](https://buildstats.info/nuget/SimpleHttpListener)](https://www.nuget.org/packages/SimpleHttpListener)
 
 *Please star this project if you find it useful. Thank you.*
 
