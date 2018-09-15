@@ -10,7 +10,7 @@
 
 This is a simple HTTP Listener that is created as a .NET Standard 2.0 Library for cross platform use. 
 
-The HTTP listener is capable of listening for HTTP on TCP as well as UDP, including UDP multicast, which makes it suitable for use with for use with for instance [UPnP](https://openconnectivity.org/developer/specifications/upnp-resources/upnp).
+The HTTP listener is capable of listening for HTTP on TCP as well as UDP, including UDP multicast, which makes it suitable for use with for instance [UPnP](https://openconnectivity.org/developer/specifications/upnp-resources/upnp).
 
 The HTTP listner is created with [Reactive Extensions](http://reactivex.io/) making it easy to use and efficient for handling the asynchronous nature of HTTP.
 
