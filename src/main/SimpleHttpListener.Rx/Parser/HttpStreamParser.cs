@@ -6,6 +6,7 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HttpMachine;
+using ISimpleHttpListener.Rx.Enum;
 using SimpleHttpListener.Rx.Helper;
 using SimpleHttpListener.Rx.Model;
 
@@ -13,8 +14,10 @@ namespace SimpleHttpListener.Rx.Parser
 {
     internal class HttpStreamParser : IDisposable
     {
-        private readonly HttpCombinedParser _parserHandler;
-        private readonly HttpParserDelegate _requestHandler;
+        private readonly HttpCombinedParser _parser;
+        private readonly HttpParserDelegate _parserDelegate;
+        private readonly ErrorCorrection[] _errorCorrections;
+
 
         private readonly byte[] _correctLast4BytesReversed = {0x0a, 0x0d, 0x0a, 0x0d};
         private readonly CircularBuffer<byte> _last4BytesCircularBuffer;
@@ -25,28 +28,26 @@ namespace SimpleHttpListener.Rx.Parser
 
         internal bool HasParsingError { get; private set; }
         
-        internal HttpStreamParser(HttpParserDelegate requestHandler)
+        internal HttpStreamParser(HttpParserDelegate parserDelegate, params ErrorCorrection[] errorCorrections)
         {
-            _requestHandler = requestHandler;
-            _parserHandler = new HttpCombinedParser(requestHandler);
+            _errorCorrections = errorCorrections;
+            _parserDelegate = parserDelegate;
+            _parser = new HttpCombinedParser(parserDelegate);
             _last4BytesCircularBuffer = new CircularBuffer<byte>(4);
         }
         
         internal async Task<IHttpRequestResponse> ParseAsync(Stream stream, CancellationToken ct)
         {
-            _disposableParserCompletion = _requestHandler.ParserCompletionObservable
+            _disposableParserCompletion = _parserDelegate.ParserCompletionObservable
                 .Subscribe(parserState =>
                 {
                     switch (parserState)
                     {
                         case ParserState.Start:
-                            //HasParsingError = false;
                             break;
                         case ParserState.Parsing:
-                            //HasParsingError = false;
                             break;
                         case ParserState.Completed:
-                            //HasParsingError = false;
                             break;
                         case ParserState.Failed:
                             HasParsingError = true;
@@ -63,7 +64,7 @@ namespace SimpleHttpListener.Rx.Parser
 
             await Observable.While(
                     () => !HasParsingError && !IsDone,
-                    Observable.FromAsync(() => ReadOneByteAtTheTimeAsync(stream, ct)))
+                    Observable.FromAsync(() => ReadByteStreamAsync(stream, ct)))
                 .Catch<byte[], SimpleHttpListenerException>(ex =>
                 {
                     HasParsingError = true;
@@ -71,28 +72,26 @@ namespace SimpleHttpListener.Rx.Parser
                 })
                 .Where(b => b != Enumerable.Empty<byte>().ToArray())
                 .Where(bSegment => bSegment.Length > 0)
-                .Do(b => _last4BytesCircularBuffer.Enqueue(b[0]))
-                .Select(FixIncompleteHttpError)
                 .Select(b => new ArraySegment<byte>(b, 0, b.Length))
-                .Select(bSegment => _parserHandler.Execute(bSegment) <= 0);
+                .Select(bSegment => _parser.Execute(bSegment) <= 0);
 
-            _parserHandler.Execute(default);
+            _parser.Execute(default);
 
-            _requestHandler.RequestResponse.MajorVersion = _parserHandler.MajorVersion;
-            _requestHandler.RequestResponse.MinorVersion = _parserHandler.MinorVersion;
-            _requestHandler.RequestResponse.ShouldKeepAlive = _parserHandler.ShouldKeepAlive;
+            _parserDelegate.RequestResponse.MajorVersion = _parser.MajorVersion;
+            _parserDelegate.RequestResponse.MinorVersion = _parser.MinorVersion;
+            _parserDelegate.RequestResponse.ShouldKeepAlive = _parser.ShouldKeepAlive;
 
-            return _requestHandler.RequestResponse;
+            return _parserDelegate.RequestResponse;
         }
 
-        private async Task<byte[]> ReadOneByteAtTheTimeAsync(Stream stream, CancellationToken ct)
+        private async Task<byte[]> ReadByteStreamAsync(Stream stream, CancellationToken ct)
         {
             if (ct.IsCancellationRequested)
             {
                 return Enumerable.Empty<byte>().ToArray();
             }
 
-            var oneByteArray = new byte[1];
+            var b = new byte[1];
             
             if (stream == null)
             {
@@ -108,7 +107,7 @@ namespace SimpleHttpListener.Rx.Parser
 
             try
             {
-                bytesRead = await stream.ReadAsync(oneByteArray, 0, 1, ct).ConfigureAwait(false);
+                bytesRead = await stream.ReadAsync(b, 0, 1, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -116,43 +115,54 @@ namespace SimpleHttpListener.Rx.Parser
                 throw new SimpleHttpListenerException("Unable to read network stream.", ex);
             }
 
-            if (bytesRead < oneByteArray.Length)
+            if (bytesRead < b.Length)
             {
                 IsDone = true;
             }
 
-            return oneByteArray;
+            return _errorCorrections.Contains(ErrorCorrection.HeaderCompletionError) 
+                ? ResilientHeader(b) 
+                : b;
+
+            
         }
 
 
         // Sometimes the HTTP does not end with \r\n\r\n, in which case it is added here.
-        private byte[] FixIncompleteHttpError(byte[] b)
+        private byte[] ResilientHeader(byte[] b)
         {
-            if (IsDone)
+            if (!IsDone)
             {
-                var last4Byte = _last4BytesCircularBuffer.ToArray();
-
-                if (last4Byte != _correctLast4BytesReversed)
+                _last4BytesCircularBuffer.Enqueue(b[0]);
+            }
+            else
+            {
+                if (!_parserDelegate.IsHeaderDone)
                 {
-                    byte[] returnNewLine = { 0x0d, 0x0a };
+                    var last4Byte = _last4BytesCircularBuffer.ToArray();
 
-                    var correctionList = new List<byte>();
-
-                    if (last4Byte[0] != _correctLast4BytesReversed[0] || last4Byte[1] != _correctLast4BytesReversed[1])
+                    if (last4Byte != _correctLast4BytesReversed)
                     {
-                        correctionList.Add(returnNewLine[0]);
-                        correctionList.Add(returnNewLine[1]);
-                    }
+                        byte[] returnNewLine = { 0x0d, 0x0a };
 
-                    if (last4Byte[2] != _correctLast4BytesReversed[2] || last4Byte[3] != _correctLast4BytesReversed[3])
-                    {
-                        correctionList.Add(returnNewLine[0]);
-                        correctionList.Add(returnNewLine[1]);
-                    }
+                        var correctionList = new List<byte>();
 
-                    if (correctionList.Any())
-                    {
-                        return correctionList.Concat(correctionList.Select(x => x)).ToArray();
+                        if (last4Byte[0] != _correctLast4BytesReversed[0] || last4Byte[1] != _correctLast4BytesReversed[1])
+                        {
+                            correctionList.Add(returnNewLine[0]);
+                            correctionList.Add(returnNewLine[1]);
+                        }
+
+                        if (last4Byte[2] != _correctLast4BytesReversed[2] || last4Byte[3] != _correctLast4BytesReversed[3])
+                        {
+                            correctionList.Add(returnNewLine[0]);
+                            correctionList.Add(returnNewLine[1]);
+                        }
+
+                        if (correctionList.Any())
+                        {
+                            return correctionList.Concat(correctionList.Select(x => x)).ToArray();
+                        }
                     }
                 }
             }
@@ -163,7 +173,7 @@ namespace SimpleHttpListener.Rx.Parser
         public void Dispose()
         {
             _disposableParserCompletion?.Dispose();
-            _parserHandler?.Dispose();
+            _parser?.Dispose();
         }
     }
 }

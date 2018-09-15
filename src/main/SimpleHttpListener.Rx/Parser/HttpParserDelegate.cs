@@ -12,7 +12,12 @@ namespace SimpleHttpListener.Rx.Parser
     {
         private readonly IObserver<ParserState> _observerParserState;
 
+        private string _headerName;
+        private bool _headerAlreadyExist;
+
         internal IObservable<ParserState> ParserCompletionObservable { get; }
+
+        internal bool IsHeaderDone { get; private set; }
 
         public HttpRequestResponse RequestResponse { get; }
 
@@ -69,15 +74,9 @@ namespace SimpleHttpListener.Rx.Parser
         {
             RequestResponse.QueryString = queryString;
         }
-
-        private string _headerName;
-        private bool _headerAlreadyExist;
-        //protected IHttpHeaders HeaderDictionary;
-
         //http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
         public void OnHeaderName(IHttpCombinedParser parser, string name)
         {
-
             if (RequestResponse.Headers.ContainsKey(name.ToUpper()))
             {
                 // Header Field Names are case-insensitive http://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.2
@@ -118,12 +117,15 @@ namespace SimpleHttpListener.Rx.Parser
 
         public void OnHeadersEnd(IHttpCombinedParser parser)
         {
-            //throw new NotImplementedException();
+            IsHeaderDone = true;
         }
 
         public void OnBody(IHttpCombinedParser parser, ArraySegment<byte> data)
         {
-            RequestResponse.Body.Write(data.Array, 0, data.Array.Length);
+            if (data.Array != null)
+            {
+                RequestResponse.Body.Write(data.Array, 0, data.Array.Length);
+            }
         }
 
         public void OnMessageEnd(IHttpCombinedParser parser)

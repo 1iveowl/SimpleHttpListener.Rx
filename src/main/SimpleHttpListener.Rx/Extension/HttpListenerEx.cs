@@ -15,7 +15,8 @@ namespace SimpleHttpListener.Rx.Extension
     {
         public static IObservable<IHttpRequestResponse> ToHttpListenerObservable(
             this TcpListener tcpListener, 
-            CancellationToken outerCancellationToken)
+            CancellationToken outerCancellationToken,
+            params ErrorCorrection[] errorCorrections)
         {
             return tcpListener.ToObservable(outerCancellationToken)
                 .Where(tcpClient => tcpClient != null)
@@ -34,13 +35,14 @@ namespace SimpleHttpListener.Rx.Extension
                         RemotePort = remoteEndPoint?.Port ?? 0
                     };
                 })
-                .Select(httpObj => Observable.FromAsync(ct => ParseAsync(httpObj, ct)))
+                .Select(httpObj => Observable.FromAsync(ct => ParseAsync(httpObj, ct, errorCorrections)))
                 .Concat();
         }
 
         public static IObservable<IHttpRequestResponse> ToHttpListenerObservable(
             this UdpClient udpClient,
-            CancellationToken outerCancellationToken)
+            CancellationToken outerCancellationToken,
+            params ErrorCorrection[] errorCorrections)
         {
             return udpClient.ToObservable(outerCancellationToken)
                 .Select(udpReceiveResult => new HttpRequestResponse
@@ -50,7 +52,7 @@ namespace SimpleHttpListener.Rx.Extension
                     RemoteAddress = udpReceiveResult.RemoteEndPoint?.Address?.ToString(),
                     RemotePort = StringToInt(udpReceiveResult.RemoteEndPoint?.Port.ToString()),
                 })
-                .Select(httpObj => Observable.FromAsync(ct => ParseAsync(httpObj, ct)))
+                .Select(httpObj => Observable.FromAsync(ct => ParseAsync(httpObj, ct, errorCorrections)))
                 .Concat();
         }
 
@@ -59,10 +61,13 @@ namespace SimpleHttpListener.Rx.Extension
             return int.TryParse(number, out var x) ? x : 0;
         }
 
-        private static async Task<IHttpRequestResponse> ParseAsync(HttpRequestResponse requestResponseObj, CancellationToken ct)
+        private static async Task<IHttpRequestResponse> ParseAsync(
+            HttpRequestResponse requestResponseObj, 
+            CancellationToken ct, 
+            params ErrorCorrection[] errorCorrections)
         {
             using (var requestHandler = new HttpParserDelegate(requestResponseObj))
-            using (var httpStreamParser = new HttpStreamParser(requestHandler))
+            using (var httpStreamParser = new HttpStreamParser(requestHandler, errorCorrections))
             {
                 var result = await httpStreamParser.ParseAsync(requestResponseObj.ResponseStream, ct);
 
