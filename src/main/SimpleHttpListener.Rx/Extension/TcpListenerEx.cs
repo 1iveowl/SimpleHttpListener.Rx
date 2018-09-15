@@ -22,7 +22,7 @@ namespace SimpleHttpListener.Rx.Extension
         {
             Debug.WriteLine("Ready for next Tcp Connection.");
 
-            return await tcpListener.AcceptTcpClientAsync();
+            return await tcpListener.AcceptTcpClientAsync().ConfigureAwait(false);
         }
     }
 }

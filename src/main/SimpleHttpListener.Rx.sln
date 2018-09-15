@@ -8,10 +8,20 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Main", "Main", "{BDD9827E-4EB7-4D2C-B467-FDD2C05C4335}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHub", "GitHub", "{3784B124-70C4-42F8-A35A-6CB664DAA811}"
+	ProjectSection(SolutionItems) = preProject
+		..\..\LICENSE.md = ..\..\LICENSE.md
+		..\..\README.md = ..\..\README.md
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{C0FC7577-3E58-4284-89A8-F13A3EC62DA1}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{1DE3FF56-95E1-4BD4-A365-0585FFE96E8B}"
+	ProjectSection(SolutionItems) = preProject
+		..\build\build.ps1 = ..\build\build.ps1
+		..\build\publish.ps1 = ..\build\publish.ps1
+		..\build\publishLocal.ps1 = ..\build\publishLocal.ps1
+		..\build\SimpleHttpListener.Rx.nuspec = ..\build\SimpleHttpListener.Rx.nuspec
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleHttpListener.Rx.Test", "..\test\HttpListener.Rx.Test\SimpleHttpListener.Rx.Test.csproj", "{6DC64468-7CB0-4D81-8785-6257A2A052B1}"
 EndProject

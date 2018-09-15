@@ -131,7 +131,6 @@ namespace SimpleHttpListener.Rx.Parser
         public void OnMessageEnd(IHttpCombinedParser parser)
         {
             RequestResponse.IsEndOfRequest = true;
-            _observerParserState.OnNext(ParserState.Completed);
             _observerParserState.OnCompleted();
         }
 

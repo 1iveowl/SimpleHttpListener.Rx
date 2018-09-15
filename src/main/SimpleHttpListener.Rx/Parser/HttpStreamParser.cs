@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reactive.Linq;
@@ -59,9 +60,9 @@ namespace SimpleHttpListener.Rx.Parser
                 ex => throw ex,
                 () =>
                 {
-
+                    IsDone = true;
                 });
-
+            
             await Observable.While(
                     () => !HasParsingError && !IsDone,
                     Observable.FromAsync(() => ReadBytesAsync(stream, ct)))
@@ -73,8 +74,7 @@ namespace SimpleHttpListener.Rx.Parser
                 .Where(b => b != Enumerable.Empty<byte>().ToArray())
                 .Where(bSegment => bSegment.Length > 0)
                 .Select(b => new ArraySegment<byte>(b, 0, b.Length))
-                .Select(bSegment => _parser.Execute(bSegment))
-                .Do(x => IsDone = x == 0);
+                .Select(bSegment => _parser.Execute(bSegment));
 
             _parser.Execute(default);
 
@@ -87,6 +87,12 @@ namespace SimpleHttpListener.Rx.Parser
 
         private async Task<byte[]> ReadBytesAsync(Stream stream, CancellationToken ct)
         {
+            if (_parserDelegate.RequestResponse.IsEndOfRequest || HasParsingError)
+            {
+                IsDone = true;
+                return Enumerable.Empty<byte>().ToArray();
+            }
+
             if (ct.IsCancellationRequested)
             {
                 return Enumerable.Empty<byte>().ToArray();
@@ -108,7 +114,9 @@ namespace SimpleHttpListener.Rx.Parser
 
             try
             {
+                //Debug.WriteLine("Reading byte.");
                 bytesRead = await stream.ReadAsync(b, 0, 1, ct).ConfigureAwait(false);
+                //Debug.WriteLine("Done reading byte.");
             }
             catch (Exception ex)
             {
