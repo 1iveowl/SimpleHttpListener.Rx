@@ -5,6 +5,8 @@
     <LangVersion>7.3</LangVersion>
     <AssemblyName>ISimpleHttpListener.Rx</AssemblyName>
     <RootNamespace>ISimpleHttpListener.Rx</RootNamespace>
+    <AssemblyVersion>6.0.0.0</AssemblyVersion>
+    <FileVersion>6.0.0.0</FileVersion>
   </PropertyGroup>
 
 </Project>
