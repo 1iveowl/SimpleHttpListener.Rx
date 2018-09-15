@@ -64,7 +64,7 @@ namespace SimpleHttpListener.Rx.Parser
 
             await Observable.While(
                     () => !HasParsingError && !IsDone,
-                    Observable.FromAsync(() => ReadByteStreamAsync(stream, ct)))
+                    Observable.FromAsync(() => ReadBytesAsync(stream, ct)))
                 .Catch<byte[], SimpleHttpListenerException>(ex =>
                 {
                     HasParsingError = true;
@@ -73,7 +73,8 @@ namespace SimpleHttpListener.Rx.Parser
                 .Where(b => b != Enumerable.Empty<byte>().ToArray())
                 .Where(bSegment => bSegment.Length > 0)
                 .Select(b => new ArraySegment<byte>(b, 0, b.Length))
-                .Select(bSegment => _parser.Execute(bSegment) <= 0);
+                .Select(bSegment => _parser.Execute(bSegment))
+                .Do(x => IsDone = x == 0);
 
             _parser.Execute(default);
 
@@ -84,7 +85,7 @@ namespace SimpleHttpListener.Rx.Parser
             return _parserDelegate.RequestResponse;
         }
 
-        private async Task<byte[]> ReadByteStreamAsync(Stream stream, CancellationToken ct)
+        private async Task<byte[]> ReadBytesAsync(Stream stream, CancellationToken ct)
         {
             if (ct.IsCancellationRequested)
             {
@@ -123,8 +124,6 @@ namespace SimpleHttpListener.Rx.Parser
             return _errorCorrections.Contains(ErrorCorrection.HeaderCompletionError) 
                 ? ResilientHeader(b) 
                 : b;
-
-            
         }
 
 
