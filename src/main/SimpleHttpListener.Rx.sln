@@ -1,0 +1,62 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28010.2019
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleHttpListener.Rx", "SimpleHttpListener.Rx\SimpleHttpListener.Rx.csproj", "{E79FD643-49E7-4CFB-81B4-AA6D0F4F0869}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Main", "Main", "{BDD9827E-4EB7-4D2C-B467-FDD2C05C4335}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHub", "GitHub", "{3784B124-70C4-42F8-A35A-6CB664DAA811}"
+	ProjectSection(SolutionItems) = preProject
+		..\..\LICENSE.md = ..\..\LICENSE.md
+		..\..\README.md = ..\..\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{C0FC7577-3E58-4284-89A8-F13A3EC62DA1}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{1DE3FF56-95E1-4BD4-A365-0585FFE96E8B}"
+	ProjectSection(SolutionItems) = preProject
+		..\build\build.ps1 = ..\build\build.ps1
+		..\build\publish.ps1 = ..\build\publish.ps1
+		..\build\publishLocal.ps1 = ..\build\publishLocal.ps1
+		..\build\SimpleHttpListener.Rx.nuspec = ..\build\SimpleHttpListener.Rx.nuspec
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleHttpListener.Rx.Test", "..\test\HttpListener.Rx.Test\SimpleHttpListener.Rx.Test.csproj", "{6DC64468-7CB0-4D81-8785-6257A2A052B1}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ISimpleHttpListener.Rx", "..\interface\ISimpleHttpListener.Rx\ISimpleHttpListener.Rx.csproj", "{6C16FE10-68B8-4A9F-BFE0-68E71C718A5C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Interface", "Interface", "{916CAABA-15B9-43C4-BA10-B90655220785}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E79FD643-49E7-4CFB-81B4-AA6D0F4F0869}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E79FD643-49E7-4CFB-81B4-AA6D0F4F0869}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E79FD643-49E7-4CFB-81B4-AA6D0F4F0869}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E79FD643-49E7-4CFB-81B4-AA6D0F4F0869}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6DC64468-7CB0-4D81-8785-6257A2A052B1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6DC64468-7CB0-4D81-8785-6257A2A052B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6DC64468-7CB0-4D81-8785-6257A2A052B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6DC64468-7CB0-4D81-8785-6257A2A052B1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6C16FE10-68B8-4A9F-BFE0-68E71C718A5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6C16FE10-68B8-4A9F-BFE0-68E71C718A5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6C16FE10-68B8-4A9F-BFE0-68E71C718A5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6C16FE10-68B8-4A9F-BFE0-68E71C718A5C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{E79FD643-49E7-4CFB-81B4-AA6D0F4F0869} = {BDD9827E-4EB7-4D2C-B467-FDD2C05C4335}
+		{6DC64468-7CB0-4D81-8785-6257A2A052B1} = {C0FC7577-3E58-4284-89A8-F13A3EC62DA1}
+		{6C16FE10-68B8-4A9F-BFE0-68E71C718A5C} = {916CAABA-15B9-43C4-BA10-B90655220785}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {0467E627-D1CD-4493-87DC-E38CF287C9AD}
+	EndGlobalSection
+EndGlobal
