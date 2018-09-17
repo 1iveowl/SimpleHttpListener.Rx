@@ -1,4 +1,5 @@
-﻿using ISimpleHttpListener.Rx.Enum;
+﻿using System.Net;
+using ISimpleHttpListener.Rx.Enum;
 using ISimpleHttpListener.Rx.Model;
 
 namespace SimpleHttpListener.Rx.Model.Base
@@ -15,8 +16,7 @@ namespace SimpleHttpListener.Rx.Model.Base
 
         public bool HasParsingErrors { get; set; }
 
-        public string LocalAddress { get; set; }
-        public int LocalPort { get; set; }
+        public IPEndPoint LocalIpEndPoint { get; set; }
 
         public string RemoteAddress { get; set; }
 

@@ -34,8 +34,7 @@ namespace SimpleHttpListener.Rx.Extension
                         TcpClient = tcpClient,
                         RemoteAddress = remoteEndPoint?.Address?.ToString(),
                         RemotePort = remoteEndPoint?.Port ?? 0,
-                        LocalAddress = ((IPEndPoint)tcpClient.Client.LocalEndPoint).Address.ToString(),
-                        LocalPort = ((IPEndPoint)tcpClient.Client.LocalEndPoint).Port
+                        LocalIpEndPoint = tcpClient.Client.LocalEndPoint as IPEndPoint
 
                     };
                 })
@@ -55,8 +54,7 @@ namespace SimpleHttpListener.Rx.Extension
                     RequestType = RequestType.UDP,
                     RemoteAddress = udpReceiveResult.RemoteEndPoint?.Address?.ToString(),
                     RemotePort = StringToInt(udpReceiveResult.RemoteEndPoint?.Port.ToString()),
-                    LocalAddress = ((IPEndPoint)udpClient.Client.LocalEndPoint).Address.ToString(),
-                    LocalPort = ((IPEndPoint)udpClient.Client.LocalEndPoint).Port
+                    LocalIpEndPoint = udpClient.Client.LocalEndPoint as IPEndPoint
                 })
                 .Select(httpObj => Observable.FromAsync(ct => ParseAsync(httpObj, ct, errorCorrections)))
                 .Concat();
