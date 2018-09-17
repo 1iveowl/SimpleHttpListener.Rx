@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Threading;
 using HttpMachine;
+using ISimpleHttpListener.Rx.Model;
 using SimpleHttpListener.Rx.Model.Base;
 
 namespace SimpleHttpListener.Rx.Model

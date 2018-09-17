@@ -11,10 +11,13 @@
     <iconUrl>https://nuget.org/Content/Images/packageDefaultIcon.png</iconUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>
-The neber and greatly improved replacement library for Simple HTTP Listener PCL.
+The newer and greatly improved replacement of Simple HTTP Listener PCL. 
     </description>
     <releaseNotes>
-Version 6.0
+[All] Local ip address and local port is now included in the HttpRequest and HttpResponse.
+[All] Fixed an issue with the IHttpRequestResponse Interface. The change calls for some minor refactoring of Using declarations.
+[All] Version 6.+
+  
     </releaseNotes>
     <copyright>Copyright 2018</copyright>
     <tags>http listener tcp udp rx reactivex reactiveextensions</tags>

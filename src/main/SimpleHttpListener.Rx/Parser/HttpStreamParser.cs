@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HttpMachine;
 using ISimpleHttpListener.Rx.Enum;
+using ISimpleHttpListener.Rx.Model;
 using SimpleHttpListener.Rx.Helper;
 using SimpleHttpListener.Rx.Model;
 

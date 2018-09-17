@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ISimpleHttpListener.Rx.Enum;
+using ISimpleHttpListener.Rx.Model;
 using SimpleHttpListener.Rx.Extension;
 using SimpleHttpListener.Rx.Model;
 using SimpleHttpListener.Rx.Service;
@@ -56,6 +57,8 @@ namespace SimpleHttpListener.Rx.Test
                     {
                         Console.WriteLine($"Remote Address: {msg.RemoteAddress}");
                         Console.WriteLine($"Remote Port: {msg.RemotePort}");
+                        Console.WriteLine($"Local Address: {msg.LocalAddress}");
+                        Console.WriteLine($"Local Port: {msg.LocalPort}");
                         msg.Body.WriteToConsole();
                         Console.WriteLine("--------------***-------------");
                     },
@@ -90,6 +93,8 @@ static void TcpListenerTest()
         {
             Console.WriteLine($"Remote Address: {r.RemoteAddress}");
             Console.WriteLine($"Remote Port: {r.RemotePort}");
+            Console.WriteLine($"Local Address: {r.LocalAddress}");
+            Console.WriteLine($"Local Port: {r.LocalPort}");
             Console.WriteLine("--------------***-------------");
         })
         .Select(r => Observable.FromAsync(() => SendResponseAsync(r, httpSender)))

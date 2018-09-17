@@ -14,6 +14,9 @@ namespace ISimpleHttpListener.Rx.Model
         IDictionary<string, string> Headers { get; }
 
         MemoryStream Body { get; }
+        string LocalAddress { get; }
+
+        int LocalPort { get; }
 
         int RemotePort { get; }
 
