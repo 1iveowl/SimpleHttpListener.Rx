@@ -6,6 +6,7 @@ using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ISimpleHttpListener.Rx.Enum;
+using ISimpleHttpListener.Rx.Model;
 using SimpleHttpListener.Rx.Model;
 using SimpleHttpListener.Rx.Parser;
 
@@ -32,7 +33,9 @@ namespace SimpleHttpListener.Rx.Extension
                         RequestType = RequestType.TCP,
                         TcpClient = tcpClient,
                         RemoteAddress = remoteEndPoint?.Address?.ToString(),
-                        RemotePort = remoteEndPoint?.Port ?? 0
+                        RemotePort = remoteEndPoint?.Port ?? 0,
+                        LocalIpEndPoint = tcpClient.Client.LocalEndPoint as IPEndPoint
+
                     };
                 })
                 .Select(httpObj => Observable.FromAsync(ct => ParseAsync(httpObj, ct, errorCorrections)))
@@ -51,6 +54,7 @@ namespace SimpleHttpListener.Rx.Extension
                     RequestType = RequestType.UDP,
                     RemoteAddress = udpReceiveResult.RemoteEndPoint?.Address?.ToString(),
                     RemotePort = StringToInt(udpReceiveResult.RemoteEndPoint?.Port.ToString()),
+                    LocalIpEndPoint = udpClient.Client.LocalEndPoint as IPEndPoint
                 })
                 .Select(httpObj => Observable.FromAsync(ct => ParseAsync(httpObj, ct, errorCorrections)))
                 .Concat();

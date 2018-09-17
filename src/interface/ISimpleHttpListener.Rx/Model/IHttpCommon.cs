@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Net.Sockets;
 using ISimpleHttpListener.Rx.Enum;
 
@@ -14,6 +15,8 @@ namespace ISimpleHttpListener.Rx.Model
         IDictionary<string, string> Headers { get; }
 
         MemoryStream Body { get; }
+
+        IPEndPoint LocalIpEndPoint { get; }
 
         int RemotePort { get; }
 
