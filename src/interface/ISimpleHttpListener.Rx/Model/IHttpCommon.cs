@@ -18,9 +18,7 @@ namespace ISimpleHttpListener.Rx.Model
 
         IPEndPoint LocalIpEndPoint { get; }
 
-        int RemotePort { get; }
-
-        string RemoteAddress { get; }
+        IPEndPoint RemoteIpEndPoint { get; }
 
         Stream ResponseStream { get; }
 

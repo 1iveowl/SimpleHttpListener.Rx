@@ -55,8 +55,8 @@ namespace SimpleHttpListener.Rx.Test
                 .ToHttpListenerObservable(cts.Token)
                 .Subscribe(msg =>
                     {
-                        Console.WriteLine($"Remote Address: {msg.RemoteAddress}");
-                        Console.WriteLine($"Remote Port: {msg.RemotePort}");
+                        Console.WriteLine($"Remote Address: {msg.RemoteIpEndPoint.Address}");
+                        Console.WriteLine($"Remote Port: {msg.RemoteIpEndPoint.Port}");
                         Console.WriteLine($"Local Address: {msg.LocalIpEndPoint.Address}");
                         Console.WriteLine($"Local Port: {msg.LocalIpEndPoint.Port}");
                         msg.Body.WriteToConsole();
@@ -91,8 +91,8 @@ static void TcpListenerTest()
         .ToHttpListenerObservable(cts.Token)
         .Do(r =>
         {
-            Console.WriteLine($"Remote Address: {r.RemoteAddress}");
-            Console.WriteLine($"Remote Port: {r.RemotePort}");
+            Console.WriteLine($"Remote Address: {r.RemoteIpEndPoint.Address}");
+            Console.WriteLine($"Remote Port: {r.RemoteIpEndPoint.Port}");
             Console.WriteLine($"Local Address: {r.LocalIpEndPoint.Address}");
             Console.WriteLine($"Local Port: {r.LocalIpEndPoint.Port}");
             Console.WriteLine("--------------***-------------");
