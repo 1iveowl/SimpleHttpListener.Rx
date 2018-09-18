@@ -18,9 +18,7 @@ namespace SimpleHttpListener.Rx.Model.Base
 
         public IPEndPoint LocalIpEndPoint { get; set; }
 
-        public string RemoteAddress { get; set; }
-
-        public int RemotePort { get; set; }
+        public IPEndPoint RemoteIpEndPoint { get; set; }
 
         protected ParseControlBase() { }
 

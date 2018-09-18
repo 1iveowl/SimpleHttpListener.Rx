@@ -59,8 +59,8 @@ static void TcpListenerTest()
         .ToHttpListenerObservable(cts.Token)
         .Do(r =>
         {
-            Console.WriteLine($"Remote Address: {r.RemoteAddress}");
-            Console.WriteLine($"Remote Port: {r.RemotePort}");
+            Console.WriteLine($"Remote Address: {r.RemoteIpEndPoint.Address}");
+            Console.WriteLine($"Remote Port: {r.RemoteIpEndPoint.Port}");
             Console.WriteLine("--------------***-------------");
         })
         // Send reply to browser
@@ -128,8 +128,8 @@ udpClient.Client.Bind(_localEnpoint);
 udpMulticastHttpListenerDisposable = udpClient.ToHttpListenerObservable(ct, ErrorCorrection.HeaderCompletionError)
     .Subscribe(r => 
     {
-        Console.WriteLine($"Remote Address: {r.RemoteAddress}");
-        Console.WriteLine($"Remote Port: {r.RemotePort}");
+		Console.WriteLine($"Remote Address: {r.RemoteIpEndPoint.Address}");
+		Console.WriteLine($"Remote Port: {r.RemoteIpEndPoint.Port}");
         Console.WriteLine("--------------***-------------");
     },
     ex => 
