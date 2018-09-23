@@ -38,7 +38,8 @@ namespace SimpleHttpListener.Rx.Extension
                     };
                 })
                 .Select(httpObj => Observable.FromAsync(ct => ParseAsync(httpObj, ct, errorCorrections)))
-                .Concat();
+                .Concat()
+                .Publish().RefCount();
         }
 
         public static IObservable<IHttpRequestResponse> ToHttpListenerObservable(
@@ -55,7 +56,8 @@ namespace SimpleHttpListener.Rx.Extension
                     LocalIpEndPoint = udpClient.Client.LocalEndPoint as IPEndPoint
                 })
                 .Select(httpObj => Observable.FromAsync(ct => ParseAsync(httpObj, ct, errorCorrections)))
-                .Concat();
+                .Concat()
+                .Publish().RefCount();
         }
 
         private static int StringToInt(string number)
