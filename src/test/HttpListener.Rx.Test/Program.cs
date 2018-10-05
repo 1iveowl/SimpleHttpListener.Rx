@@ -70,67 +70,67 @@ namespace SimpleHttpListener.Rx.Test
                     {
 
                     });
-
+            await Task.CompletedTask;
         }
 
-static void TcpListenerTest()
-{
-
-    var uri = new Uri("http://192.168.0.59:8000");
-
-    var tcpListener = new TcpListener(uri.Host.GetIPv4Address(), uri.Port)
-    {
-        ExclusiveAddressUse = false
-    };
-    
-    var httpSender = new HttpSender();
-
-    var cts = new CancellationTokenSource();
-
-    var disposable = tcpListener
-        .ToHttpListenerObservable(cts.Token)
-        .Do(r =>
+        static void TcpListenerTest()
         {
-            Console.WriteLine($"Remote Address: {r.RemoteIpEndPoint.Address}");
-            Console.WriteLine($"Remote Port: {r.RemoteIpEndPoint.Port}");
-            Console.WriteLine($"Local Address: {r.LocalIpEndPoint.Address}");
-            Console.WriteLine($"Local Port: {r.LocalIpEndPoint.Port}");
-            Console.WriteLine("--------------***-------------");
-        })
-        .Select(r => Observable.FromAsync(() => SendResponseAsync(r, httpSender)))
-        .Concat()
-        .Subscribe(r =>
-        {
-            
-        },
-        ex =>
-        {
-            
-        },
-        () =>
-        {
-            
-        });
-}
 
-static async Task SendResponseAsync(IHttpRequestResponse request, HttpSender httpSender)
-{
-    if (request.RequestType == RequestType.TCP)
-    {
-        var response = new HttpResponse
-        {
-            StatusCode = (int)HttpStatusCode.OK,
-            ResponseReason = HttpStatusCode.OK.ToString(),
-            Headers = new Dictionary<string, string>
+            var uri = new Uri("http://192.168.0.59:8000");
+
+            var tcpListener = new TcpListener(uri.Host.GetIPv4Address(), uri.Port)
             {
-                {"Date", DateTime.UtcNow.ToString("r")},
-                {"Content-Type", "text/html; charset=UTF-8" },
-            },
-            Body = new MemoryStream(Encoding.UTF8.GetBytes($"<html>\r\n<body>\r\n<h1>Hello, World! {DateTime.Now}</h1>\r\n</body>\r\n</html>"))
-        };
+                ExclusiveAddressUse = false
+            };
+            
+            var httpSender = new HttpSender();
 
-        await httpSender.SendTcpResponseAsync(request, response).ConfigureAwait(false);
-    }
-}
+            var cts = new CancellationTokenSource();
+
+            var disposable = tcpListener
+                .ToHttpListenerObservable(cts.Token)
+                .Do(r =>
+                {
+                    Console.WriteLine($"Remote Address: {r.RemoteIpEndPoint.Address}");
+                    Console.WriteLine($"Remote Port: {r.RemoteIpEndPoint.Port}");
+                    Console.WriteLine($"Local Address: {r.LocalIpEndPoint.Address}");
+                    Console.WriteLine($"Local Port: {r.LocalIpEndPoint.Port}");
+                    Console.WriteLine("--------------***-------------");
+                })
+                .Select(r => Observable.FromAsync(() => SendResponseAsync(r, httpSender)))
+                .Concat()
+                .Subscribe(r =>
+                {
+                    
+                },
+                ex =>
+                {
+                    
+                },
+                () =>
+                {
+                    
+                });
+        }
+
+        static async Task SendResponseAsync(IHttpRequestResponse request, HttpSender httpSender)
+        {
+            if (request.RequestType == RequestType.TCP)
+            {
+                var response = new HttpResponse
+                {
+                    StatusCode = (int)HttpStatusCode.OK,
+                    ResponseReason = HttpStatusCode.OK.ToString(),
+                    Headers = new Dictionary<string, string>
+                    {
+                        {"Date", DateTime.UtcNow.ToString("r")},
+                        {"Content-Type", "text/html; charset=UTF-8" },
+                    },
+                    Body = new MemoryStream(Encoding.UTF8.GetBytes($"<html>\r\n<body>\r\n<h1>Hello, World! {DateTime.Now}</h1>\r\n</body>\r\n</html>"))
+                };
+
+                await httpSender.SendTcpResponseAsync(request, response).ConfigureAwait(false);
+            }
+        }
     }
 }
