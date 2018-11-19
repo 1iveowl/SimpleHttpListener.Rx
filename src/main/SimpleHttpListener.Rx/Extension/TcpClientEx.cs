@@ -57,10 +57,12 @@ namespace SimpleHttpListener.Rx.Extension
             await stream.WriteAsync(frame, 0, frame.Length, ct);
         }
 
-        private static IObservable<byte[]> CreateByteStreamObservable(Stream stream,  CancellationToken ct)
+        private static IObservable<byte[]> CreateByteStreamObservable(Stream stream, CancellationToken ct)
         {
+            var token = ct;
+
             return Observable.While(
-                () => !ct.IsCancellationRequested,
+                () => !token.IsCancellationRequested,
                 Observable.FromAsync(() => ReadOneByteAtTheTimeAsync(stream, ct)));
         }
 
