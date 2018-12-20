@@ -76,7 +76,7 @@ namespace SimpleHttpListener.Rx.Test
         static void TcpListenerTest()
         {
 
-            var uri = new Uri("http://192.168.0.59:1901");
+            var uri = new Uri("http://192.168.0.59:8088");
 
             var tcpListener = new TcpListener(uri.Host.GetIPv4Address(), uri.Port)
             {
