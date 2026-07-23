@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <PackageId>SimpleHttpListener.Rx</PackageId>
-    <Version>7.0.0</Version>
+    <Version>7.0.1</Version>
     <Authors>1iveowl</Authors>
     <Description>A simple Reactive Extensions (Rx) based HTTP listener for TCP, UDP and multicast, supporting HTTP keep-alive and SSDP-style datagrams.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="HttpMachine.PCL" Version="6.0.0" />
+    <PackageReference Include="HttpMachine.PCL" Version="6.0.1" />
     <PackageReference Include="System.Reactive" Version="7.0.0" />
   </ItemGroup>
 
