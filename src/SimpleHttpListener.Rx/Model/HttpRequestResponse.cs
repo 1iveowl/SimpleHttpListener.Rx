@@ -1,4 +1,5 @@
 using System.Net;
+using System.Runtime.CompilerServices;
 
 namespace SimpleHttpListener.Rx.Model;
 
@@ -6,7 +7,12 @@ namespace SimpleHttpListener.Rx.Model;
 /// One parsed HTTP message (request or response) emitted by the listener observables.
 /// Immutable snapshot; a keep-alive TCP connection produces one instance per message.
 /// </summary>
-public sealed class HttpRequestResponse
+/// <remarks>
+/// A record, so <c>with</c> expressions work for derived copies. Equality is
+/// reference-based (not member-based): a message carries a live <see cref="Connection"/>
+/// and a <see cref="Body"/> buffer, so value comparison would be misleading.
+/// </remarks>
+public sealed record HttpRequestResponse
 {
     /// <summary>Whether this message is a request or a response.</summary>
     public MessageType MessageType { get; init; }
@@ -80,4 +86,10 @@ public sealed class HttpRequestResponse
     /// See <see cref="IHttpConnection"/> for the ownership contract.
     /// </summary>
     public IHttpConnection? Connection { get; init; }
+
+    /// <summary>Reference equality; see the class remarks.</summary>
+    public bool Equals(HttpRequestResponse? other) => ReferenceEquals(this, other);
+
+    /// <summary>Identity-based hash, consistent with reference equality.</summary>
+    public override int GetHashCode() => RuntimeHelpers.GetHashCode(this);
 }

@@ -230,6 +230,30 @@ public class ParsingTests
         Assert.Equal(HttpTransport.Udp, message.Transport);
     }
 
+    [Fact]
+    public void Datagram_parser_reuse_recovers_after_garbage_and_correction()
+    {
+        using var datagramParser = new DatagramParser();
+        var valid = "NOTIFY * HTTP/1.1\r\nHOST: x\r\n\r\n"u8.ToArray();
+        var garbage = "NOT HTTP\r\n"u8.ToArray();
+        var truncated = "M-SEARCH * HTTP/1.1\r\nHOST: x\r\n"u8.ToArray();
+
+        // valid → reused parser; garbage → recreated; valid again must still parse
+        Assert.False(datagramParser.Parse(valid, false, null, null).HasParsingErrors);
+        Assert.True(datagramParser.Parse(garbage, false, null, null).HasParsingErrors);
+
+        var recovered = datagramParser.Parse(valid, false, null, null);
+        Assert.False(recovered.HasParsingErrors);
+        Assert.Equal("NOTIFY", recovered.Method);
+
+        // correction path needs the EOF signal → recreated; valid again must still parse
+        var corrected = datagramParser.Parse(truncated, true, null, null);
+        Assert.False(corrected.HasParsingErrors);
+        Assert.Equal("M-SEARCH", corrected.Method);
+
+        Assert.False(datagramParser.Parse(valid, false, null, null).HasParsingErrors);
+    }
+
     // 15
     [Fact]
     public void Ssdp_datagram_without_header_terminator_stays_incomplete_without_correction()

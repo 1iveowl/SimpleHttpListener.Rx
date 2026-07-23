@@ -55,6 +55,7 @@ public static class HttpListenerExtensions
         return Observable.Create<HttpRequestResponse>(async (observer, subscriptionToken) =>
             {
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(subscriptionToken, cancellationToken);
+                using var datagramParser = new DatagramParser();
 
                 try
                 {
@@ -62,7 +63,7 @@ public static class HttpListenerExtensions
                     {
                         var result = await udpClient.ReceiveAsync(linkedCts.Token).ConfigureAwait(false);
 
-                        observer.OnNext(HttpMessageParser.ParseDatagram(
+                        observer.OnNext(datagramParser.Parse(
                             result.Buffer,
                             headerCompletionCorrection,
                             udpClient.Client.LocalEndPoint as IPEndPoint,

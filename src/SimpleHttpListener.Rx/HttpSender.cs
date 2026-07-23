@@ -1,4 +1,6 @@
-using System.Text;
+using System.Buffers;
+using System.Runtime.CompilerServices;
+using System.Text.Unicode;
 using SimpleHttpListener.Rx.Model;
 
 namespace SimpleHttpListener.Rx;
@@ -47,10 +49,17 @@ public static class HttpSender
         bool closeConnection = true,
         CancellationToken cancellationToken = default)
     {
-        var datagram = ComposeResponse(response, closeConnection);
+        var (buffer, length) = ComposeResponse(response, closeConnection);
 
-        await connection.Stream.WriteAsync(datagram, cancellationToken).ConfigureAwait(false);
-        await connection.Stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await connection.Stream.WriteAsync(buffer.AsMemory(0, length), cancellationToken).ConfigureAwait(false);
+            await connection.Stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
 
         if (closeConnection)
         {
@@ -58,12 +67,27 @@ public static class HttpSender
         }
     }
 
-    private static ReadOnlyMemory<byte> ComposeResponse(HttpResponse response, bool closeConnection)
+    /// <summary>
+    /// Composes the response UTF-8 encoded into a rented buffer — no intermediate string or
+    /// byte[] allocations. The caller must return the buffer to <see cref="ArrayPool{T}.Shared"/>.
+    /// </summary>
+    private static (byte[] Buffer, int Length) ComposeResponse(HttpResponse response, bool closeConnection)
     {
         var reasonPhrase = response.ReasonPhrase ?? ReasonPhrase.For(response.StatusCode);
 
-        var stringBuilder = new StringBuilder();
-        stringBuilder.Append(
+        // Worst-case UTF-8 sizing: 3 bytes per char of caller-supplied text, 128 bytes for
+        // the fixed parts (status line ints, auto Content-Length and Connection headers).
+        var capacity = 128 + reasonPhrase.Length * 3 + response.Body.Length;
+
+        foreach (var (name, value) in response.Headers)
+        {
+            capacity += (name.Length + value.Length) * 3 + 4;
+        }
+
+        var buffer = ArrayPool<byte>.Shared.Rent(capacity);
+        var written = 0;
+
+        written += WriteUtf8(buffer.AsSpan(written),
             $"HTTP/{response.MajorVersion}.{response.MinorVersion} {response.StatusCode} {reasonPhrase}\r\n");
 
         var hasContentLength = false;
@@ -76,13 +100,13 @@ public static class HttpSender
             hasTransferEncoding |= name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase);
             hasConnection |= name.Equals("Connection", StringComparison.OrdinalIgnoreCase);
 
-            stringBuilder.Append($"{name}: {value}\r\n");
+            written += WriteUtf8(buffer.AsSpan(written), $"{name}: {value}\r\n");
         }
 
         // Keep-alive framing requires an explicit length on every response, including empty ones.
         if (!hasContentLength && !hasTransferEncoding)
         {
-            stringBuilder.Append($"Content-Length: {response.Body.Length}\r\n");
+            written += WriteUtf8(buffer.AsSpan(written), $"Content-Length: {response.Body.Length}\r\n");
         }
 
         if (!hasConnection)
@@ -92,26 +116,28 @@ public static class HttpSender
 
             if (closeConnection && isHttp11OrLater)
             {
-                stringBuilder.Append("Connection: close\r\n");
+                written += WriteUtf8(buffer.AsSpan(written), $"Connection: close\r\n");
             }
             else if (!closeConnection && !isHttp11OrLater)
             {
-                stringBuilder.Append("Connection: keep-alive\r\n");
+                written += WriteUtf8(buffer.AsSpan(written), $"Connection: keep-alive\r\n");
             }
         }
 
-        stringBuilder.Append("\r\n");
+        written += WriteUtf8(buffer.AsSpan(written), $"\r\n");
 
-        var headerBytes = Encoding.UTF8.GetBytes(stringBuilder.ToString());
+        response.Body.Span.CopyTo(buffer.AsSpan(written));
+        written += response.Body.Length;
 
-        if (response.Body.IsEmpty)
-        {
-            return headerBytes;
-        }
+        return (buffer, written);
+    }
 
-        var datagram = new byte[headerBytes.Length + response.Body.Length];
-        headerBytes.CopyTo(datagram, 0);
-        response.Body.CopyTo(datagram.AsMemory(headerBytes.Length));
-        return datagram;
+    private static int WriteUtf8(
+        Span<byte> destination,
+        [InterpolatedStringHandlerArgument(nameof(destination))] ref Utf8.TryWriteInterpolatedStringHandler handler)
+    {
+        return Utf8.TryWrite(destination, ref handler, out var bytesWritten)
+            ? bytesWritten
+            : throw new InvalidOperationException("Response buffer was sized too small.");
     }
 }

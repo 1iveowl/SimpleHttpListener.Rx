@@ -1,9 +1,16 @@
+using System.Runtime.CompilerServices;
+
 namespace SimpleHttpListener.Rx.Model;
 
 /// <summary>
 /// An HTTP response to send with <see cref="HttpSender"/>.
 /// </summary>
-public sealed class HttpResponse
+/// <remarks>
+/// A record, so <c>with</c> expressions work for derived copies. Equality is
+/// reference-based (not member-based): <see cref="Headers"/> and <see cref="Body"/> would
+/// compare by reference anyway, so member comparison would be misleading.
+/// </remarks>
+public sealed record HttpResponse
 {
     /// <summary>Status code; defaults to <c>200</c>.</summary>
     public int StatusCode { get; init; } = 200;
@@ -26,4 +33,10 @@ public sealed class HttpResponse
 
     /// <summary>Response body; empty by default.</summary>
     public ReadOnlyMemory<byte> Body { get; init; }
+
+    /// <summary>Reference equality; see the class remarks.</summary>
+    public bool Equals(HttpResponse? other) => ReferenceEquals(this, other);
+
+    /// <summary>Identity-based hash, consistent with reference equality.</summary>
+    public override int GetHashCode() => RuntimeHelpers.GetHashCode(this);
 }

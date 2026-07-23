@@ -13,6 +13,8 @@ internal static class HttpMessageParser
 {
     private const int ReadBufferSize = 8192;
 
+    private static readonly List<HttpRequestResponse> NoMessages = [];
+
     /// <summary>
     /// Reads a TCP connection and emits one <see cref="HttpRequestResponse"/> per parsed
     /// message (0..n per connection under keep-alive). Never errors the observable: parse
@@ -53,7 +55,7 @@ internal static class HttpMessageParser
                     {
                         // ObjectDisposedException means the consumer closed the connection —
                         // a normal end, not a parse failure.
-                        if (ex is not ObjectDisposedException && parserDelegate.HasIncompleteMessage)
+                        if (ex is not ObjectDisposedException && parserDelegate.State.HasIncompleteMessage)
                         {
                             observer.OnNext(BuildIncompleteMessage());
                         }
@@ -63,18 +65,21 @@ internal static class HttpMessageParser
 
                     if (bytesRead == 0)
                     {
-                        if (parserDelegate.HasIncompleteMessage)
+                        if (parserDelegate.State.HasIncompleteMessage)
                         {
-                            if (headerCompletionCorrection && !parserDelegate.AreHeadersComplete)
+                            if (headerCompletionCorrection && !parserDelegate.State.AreHeadersComplete)
                             {
                                 TryExecute(parser, "\r\n\r\n"u8);
                             }
 
                             TryExecute(parser, ReadOnlySpan<byte>.Empty);
 
-                            DrainCompleted(parserDelegate, observer.OnNext, connection, out _);
+                            foreach (var message in DrainCompleted(parserDelegate, connection))
+                            {
+                                observer.OnNext(message);
+                            }
 
-                            if (parserDelegate.HasIncompleteMessage)
+                            if (parserDelegate.State.HasIncompleteMessage)
                             {
                                 observer.OnNext(BuildIncompleteMessage());
                             }
@@ -83,26 +88,32 @@ internal static class HttpMessageParser
                         break;
                     }
 
-                    var consumed = TryExecute(parser, buffer.AsSpan(0, bytesRead));
+                    var (consumed, faulted) = TryExecute(parser, buffer.AsSpan(0, bytesRead));
+                    var hasError = faulted || consumed != bytesRead;
 
                     // The parser treats a non-keep-alive request without Content-Length or
                     // Transfer-Encoding as close-delimited and waits for EOF; per RFC 9112
                     // such a request has no body, so complete it now.
-                    if (consumed == bytesRead
-                        && parserDelegate is { HasIncompleteMessage: true, AreHeadersComplete: true, IsRequest: true, HasBodyFramingHeader: false })
+                    if (!hasError && parserDelegate.State is
+                        { HasIncompleteMessage: true, AreHeadersComplete: true, IsRequest: true, HasBodyFramingHeader: false })
                     {
                         TryExecute(parser, ReadOnlySpan<byte>.Empty);
                     }
 
-                    DrainCompleted(parserDelegate, observer.OnNext, connection, out var lastMessageClosed);
+                    var messages = DrainCompleted(parserDelegate, connection);
 
-                    if (consumed != bytesRead)
+                    foreach (var message in messages)
+                    {
+                        observer.OnNext(message);
+                    }
+
+                    if (hasError)
                     {
                         observer.OnNext(BuildIncompleteMessage());
                         break;
                     }
 
-                    if (lastMessageClosed)
+                    if (messages.Count > 0 && !messages[^1].ShouldKeepAlive)
                     {
                         // The consumer now owns the connection; SendResponseAsync in auto
                         // mode disposes it after replying.
@@ -135,7 +146,8 @@ internal static class HttpMessageParser
     }
 
     /// <summary>
-    /// Parses one UDP datagram as a complete HTTP message.
+    /// Parses one UDP datagram as a complete HTTP message. For datagram streams prefer a
+    /// reused <see cref="DatagramParser"/>.
     /// </summary>
     internal static HttpRequestResponse ParseDatagram(
         byte[] datagram,
@@ -143,62 +155,43 @@ internal static class HttpMessageParser
         IPEndPoint? localEndPoint,
         IPEndPoint? remoteEndPoint)
     {
-        using var parserDelegate = new ListenerParserDelegate();
-        using var parser = new HttpCombinedParser(parserDelegate);
-
-        var consumed = TryExecute(parser, datagram);
-        var hasError = consumed != datagram.Length;
-
-        if (!hasError && parserDelegate.HasIncompleteMessage)
-        {
-            if (headerCompletionCorrection && !parserDelegate.AreHeadersComplete)
-            {
-                TryExecute(parser, "\r\n\r\n"u8);
-            }
-
-            // A datagram is self-delimiting; feed the EOF signal to complete
-            // close-delimited bodies.
-            TryExecute(parser, ReadOnlySpan<byte>.Empty);
-        }
-
-        if (!hasError && parserDelegate.CompletedMessages.TryDequeue(out var snapshot))
-        {
-            return Build(snapshot, HttpTransport.Udp, null, localEndPoint, remoteEndPoint);
-        }
-
-        return BuildIncomplete(parserDelegate, parser, HttpTransport.Udp, null, localEndPoint, remoteEndPoint);
+        using var datagramParser = new DatagramParser();
+        return datagramParser.Parse(datagram, headerCompletionCorrection, localEndPoint, remoteEndPoint);
     }
 
-    private static int TryExecute(HttpCombinedParser parser, ReadOnlySpan<byte> data)
+    internal static (int Consumed, bool Faulted) TryExecute(HttpCombinedParser parser, ReadOnlySpan<byte> data)
     {
         try
         {
-            return parser.Execute(data);
+            return (parser.Execute(data), false);
         }
         catch (Exception)
         {
-            return -1;
+            return (0, true);
         }
     }
 
-    private static void DrainCompleted(
+    private static List<HttpRequestResponse> DrainCompleted(
         ListenerParserDelegate parserDelegate,
-        Action<HttpRequestResponse> emit,
-        IHttpConnection connection,
-        out bool lastMessageClosed)
+        IHttpConnection connection)
     {
-        lastMessageClosed = false;
+        if (parserDelegate.CompletedMessages.Count == 0)
+        {
+            return NoMessages;
+        }
+
+        var messages = new List<HttpRequestResponse>(parserDelegate.CompletedMessages.Count);
 
         while (parserDelegate.CompletedMessages.TryDequeue(out var snapshot))
         {
-            var message = Build(snapshot, HttpTransport.Tcp, connection,
-                connection.LocalEndPoint, connection.RemoteEndPoint);
-            lastMessageClosed = !message.ShouldKeepAlive;
-            emit(message);
+            messages.Add(Build(snapshot, HttpTransport.Tcp, connection,
+                connection.LocalEndPoint, connection.RemoteEndPoint));
         }
+
+        return messages;
     }
 
-    private static HttpRequestResponse Build(
+    internal static HttpRequestResponse Build(
         UpstreamMessage snapshot,
         HttpTransport transport,
         IHttpConnection? connection,
@@ -212,6 +205,26 @@ internal static class HttpMessageParser
             body = bodyStream.TryGetBuffer(out var segment)
                 ? segment.AsMemory()
                 : bodyStream.ToArray();
+        }
+
+        IReadOnlyDictionary<string, string> headers;
+
+        if (snapshot.Headers is not { Count: > 0 } rawHeaders)
+        {
+            headers = FrozenDictionary<string, string>.Empty;
+        }
+        else
+        {
+            // Built once and read a handful of times per message, so a plain Dictionary
+            // beats FrozenDictionary's construction cost.
+            var headerDictionary = new Dictionary<string, string>(rawHeaders.Count, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var (name, values) in rawHeaders)
+            {
+                headerDictionary[name] = string.Join(", ", values);
+            }
+
+            headers = headerDictionary;
         }
 
         var isRequest = snapshot.MessageType == MessageTypeKind.Request;
@@ -231,12 +244,7 @@ internal static class HttpMessageParser
             MinorVersion = snapshot.MinorVersion,
             ShouldKeepAlive = snapshot.ShouldKeepAlive,
             IsChunked = snapshot.IsTransferEncodingChunked,
-            Headers = snapshot.Headers is null
-                ? FrozenDictionary<string, string>.Empty
-                : snapshot.Headers.ToFrozenDictionary(
-                    static kv => kv.Key,
-                    static kv => string.Join(", ", kv.Value),
-                    StringComparer.OrdinalIgnoreCase),
+            Headers = headers,
             Body = body,
             IsEndOfMessage = snapshot.IsEndOfMessage,
             HasParsingErrors = false,
@@ -246,7 +254,7 @@ internal static class HttpMessageParser
         };
     }
 
-    private static HttpRequestResponse BuildIncomplete(
+    internal static HttpRequestResponse BuildIncomplete(
         ListenerParserDelegate parserDelegate,
         HttpCombinedParser parser,
         HttpTransport transport,
@@ -256,7 +264,7 @@ internal static class HttpMessageParser
     {
         return new HttpRequestResponse
         {
-            MessageType = parserDelegate.IsRequest ? MessageType.Request : MessageType.Response,
+            MessageType = parserDelegate.State.IsRequest ? MessageType.Request : MessageType.Response,
             Transport = transport,
             MajorVersion = parser.MajorVersion,
             MinorVersion = parser.MinorVersion,

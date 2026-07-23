@@ -54,6 +54,20 @@ public class HttpSenderTests
     }
 
     [Fact]
+    public async Task Non_ascii_header_values_are_utf8_encoded()
+    {
+        var connection = new FakeConnection();
+
+        await connection.SendResponseAsync(
+            new HttpResponse { Headers = { ["X-Note"] = "café ☕" } },
+            closeConnection: false);
+
+        Assert.Equal(
+            "HTTP/1.1 200 OK\r\nX-Note: café ☕\r\nContent-Length: 0\r\n\r\n"u8.ToArray(),
+            connection.WrittenBytes);
+    }
+
+    [Fact]
     public async Task Caller_supplied_content_length_is_not_duplicated()
     {
         var connection = new FakeConnection();

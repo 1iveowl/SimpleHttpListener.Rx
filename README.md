@@ -127,6 +127,8 @@ The listener observables never fail because of one bad client. Malformed input o
 
 Behavior note: v6 closed every connection after one message. v7 honors keep-alive, so a consumer must respond per message; `SendResponseAsync` auto mode preserves v6-style close semantics whenever the client asked for `Connection: close` or HTTP/1.0.
 
+`HttpRequestResponse` and `HttpResponse` are `record` types, so `with` expressions work for derived copies. Their equality is deliberately reference-based (a received message carries a live connection and a body buffer, so member-wise comparison would be misleading).
+
 ## History
 
 SimpleHttpListener.Rx is the successor to [Simple HTTP Listener PCL](https://github.com/1iveowl/Simple-Http-Listener-PCL). The legacy package remains available as [SimpleHttpListener](https://www.nuget.org/packages/SimpleHttpListener).
