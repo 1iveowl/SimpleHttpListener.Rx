@@ -4,8 +4,8 @@
 [![Downloads](https://img.shields.io/nuget/dt/SimpleHttpListener.Rx?logo=nuget&color=blue)](https://www.nuget.org/packages/SimpleHttpListener.Rx)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.md)
 
-[![.NET Standard](https://img.shields.io/badge/.NET%20Standard-2.0-5C2D91?logo=dotnet&logoColor=white)](https://learn.microsoft.com/dotnet/standard/net-standard)
-[![System.Reactive](https://img.shields.io/badge/Rx-4.0.0-ff69b4.svg)](https://reactivex.io/)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![System.Reactive](https://img.shields.io/badge/Rx-7.0.0-ff69b4.svg)](https://reactivex.io/)
 
 An Rx-based HTTP listener for TCP, UDP, and UDP multicast traffic.
 
@@ -13,27 +13,21 @@ An Rx-based HTTP listener for TCP, UDP, and UDP multicast traffic.
 
 ## Overview
 
-SimpleHttpListener.Rx is a .NET Standard 2.0 library for cross-platform HTTP message handling. It can listen for HTTP over TCP and UDP, including UDP multicast, which makes it useful for protocols such as [UPnP](https://openconnectivity.org/developer/specifications/upnp-resources/upnp).
+SimpleHttpListener.Rx is a .NET library for HTTP message handling over application-controlled transports. It can listen for HTTP over TCP and UDP, including UDP multicast, which makes it useful for protocols such as [UPnP](https://openconnectivity.org/developer/specifications/upnp-resources/upnp)/[SSDP](https://en.wikipedia.org/wiki/Simple_Service_Discovery_Protocol).
 
-The library is built with [Reactive Extensions](https://reactivex.io/), exposing incoming HTTP messages as observables for asynchronous processing.
+The library is built with [Reactive Extensions](https://reactivex.io/), exposing incoming HTTP messages as an `IObservable<HttpRequestResponse>` for asynchronous processing.
 
-## Why version 6.0?
-
-SimpleHttpListener.Rx is the successor to [Simple HTTP Listener PCL](https://github.com/1iveowl/Simple-Http-Listener-PCL). The changes from version 5.1.1 were substantial enough to warrant a new name and major version, while retaining the same overall goal: a lightweight HTTP listener for application-controlled transports.
-
-The legacy package remains available as [SimpleHttpListener](https://www.nuget.org/packages/SimpleHttpListener).
+Version 7.0.0 is a modernization release: .NET 10, [HttpMachine.PCL](https://www.nuget.org/packages/HttpMachine.PCL) 6.0.0 span-based parsing, HTTP keep-alive with concurrent connection handling, and a cleaned-up public API. See [Breaking changes in 7.0.0](#breaking-changes-in-700) if you are upgrading.
 
 ## Usage
 
-Turn a `TcpListener` or `UdpClient` into an observable HTTP listener with the `ToHttpListenerObservable` extension method. The examples below show both transports.
+Turn a `TcpListener` or `UdpClient` into an observable HTTP listener with the `ToHttpListenerObservable` extension method.
 
 ### Namespaces
 
-```cs
-using ISimpleHttpListener.Rx.Enum;
-using SimpleHttpListener.Rx.Extension;
+```csharp
+using SimpleHttpListener.Rx;
 using SimpleHttpListener.Rx.Model;
-using SimpleHttpListener.Rx.Service;
 ```
 
 ### TCP HTTP listener
@@ -41,107 +35,98 @@ using SimpleHttpListener.Rx.Service;
 Avoid an `async` subscriber such as `.Subscribe(async x => ...)`; [it can make Rx error handling and scheduling difficult](https://stackoverflow.com/a/37131023/4140832). Instead, convert the asynchronous operation with `Observable.FromAsync`, then concatenate it as shown below.
 
 ```csharp
+var tcpListener = new TcpListener(IPAddress.Loopback, 8088);
 
-static void TcpListenerTest()
-{
+var cts = new CancellationTokenSource();
 
-    var uri = new Uri("http://mylocalipaddress:8000");
-
-    var tcpListener = new TcpListener(uri.Host.GetIPv4Address(), uri.Port)
+var disposable = tcpListener
+    .ToHttpListenerObservable(cts.Token)
+    .Do(r => Console.WriteLine($"{r.Method} {r.Path} from {r.RemoteEndPoint}"))
+    // Send reply to the client
+    .Select(r => Observable.FromAsync(() => r.SendResponseAsync(new HttpResponse
     {
-        ExclusiveAddressUse = false
-    };
-    
-    var httpSender = new HttpSender();
-
-    var cts = new CancellationTokenSource();
-
-    var disposable = tcpListener
-        .ToHttpListenerObservable(cts.Token)
-        .Do(r =>
+        Headers =
         {
-            Console.WriteLine($"Remote Address: {r.RemoteIpEndPoint.Address}");
-            Console.WriteLine($"Remote Port: {r.RemoteIpEndPoint.Port}");
-            Console.WriteLine("--------------***-------------");
-        })
-        // Send reply to browser
-        .Select(r => Observable.FromAsync(() => SendResponseAsync(r, httpSender)))
-        .Concat()
-        .Subscribe(r =>
-        {
-            Console.WriteLine("Reply sent.");
+            ["Date"] = DateTime.UtcNow.ToString("r"),
+            ["Content-Type"] = "text/html; charset=UTF-8"
         },
-        ex =>
-        {
-            Console.WriteLine($"Exception: {ex}");
-        },
-        () =>
-        {
-            Console.WriteLine("Completed.");
-        });
-}
-
-static async Task SendResponseAsync(IHttpRequestResponse request, HttpSender httpSender)
-{
-    if (request.RequestType == RequestType.TCP)
-    {
-        var response = new HttpResponse
-        {
-            StatusCode = (int)HttpStatusCode.OK,
-            ResponseReason = HttpStatusCode.OK.ToString(),
-            Headers = new Dictionary<string, string>
-            {
-                {"Date", DateTime.UtcNow.ToString("r")},
-                {"Content-Type", "text/html; charset=UTF-8" },
-            },
-            Body = new MemoryStream(Encoding.UTF8.GetBytes($"<html>\r\n<body>\r\n<h1>Hello, World! {DateTime.Now}</h1>\r\n</body>\r\n</html>"))
-        };
-
-        await httpSender.SendTcpResponseAsync(request, response).ConfigureAwait(false);
-    }
-}
-
-
+        Body = Encoding.UTF8.GetBytes($"<html><body><h1>Hello, World! {DateTime.Now}</h1></body></html>")
+    })))
+    .Concat()
+    .Subscribe(
+        _ => Console.WriteLine("Reply sent."),
+        ex => Console.WriteLine($"Exception: {ex}"),
+        () => Console.WriteLine("Completed."));
 ```
+
+The listener starts when the observable is first subscribed and stops when the last subscription is disposed (or the token is cancelled). Re-subscribing restarts it.
+
+### Keep-alive and connection ownership
+
+New in 7.0.0: connections are handled **concurrently**, and an HTTP/1.1 keep-alive connection emits **one message per request** — a slow or idle client no longer blocks other clients.
+
+Ownership of the underlying connection is simple:
+
+- While the listener is reading a connection, the listener owns it. It disposes the connection when the client closes it or a fatal parse/IO error occurs.
+- When a message with `ShouldKeepAlive == false` is emitted, the listener stops reading and the **consumer** owns the connection. `SendResponseAsync` in auto mode (`closeConnection: null`, the default) closes it after the response is written, so the simple flow above handles both cases correctly.
+- Disposing a connection yourself while the listener is reading it is treated as a normal close, not an error.
+
+`SendResponseAsync` always emits a correct `Content-Length` (including `0` for empty bodies) unless you set `Content-Length` or `Transfer-Encoding` yourself, and adds the appropriate `Connection: close` / `Connection: keep-alive` header automatically.
 
 ### UDP HTTP listener
 
-The following UDP listener receives UPnP [SSDP](https://en.wikipedia.org/wiki/Simple_Service_Discovery_Protocol) multicast traffic from the local network.
+The following UDP listener receives UPnP SSDP multicast traffic from the local network.
 
 ```csharp
-var localHost = IPAddress.Parse("192.168.0.59");
-var localEndPoint = new IPEndPoint(localHost, 1900);
-
-var multicastIpAddress = IPAddress.Parse("239.255.255.250");
-
-udpClient = new UdpClient
+var udpClient = new UdpClient
 {
     ExclusiveAddressUse = false,
     MulticastLoopback = true
 };
 
 udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+udpClient.JoinMulticastGroup(IPAddress.Parse("239.255.255.250"));
+udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, 1900));
 
-udpClient.JoinMulticastGroup(IPAddress.Parse(UdpSSDPMultiCastAddress));
-
-udpClient.Client.Bind(_localEnpoint);
-
-udpMulticastHttpListenerDisposable = udpClient.ToHttpListenerObservable(ct, ErrorCorrection.HeaderCompletionError)
-    .Subscribe(r => 
+var disposable = udpClient
+    .ToHttpListenerObservable(cts.Token, ErrorCorrection.HeaderCompletionError)
+    .Subscribe(r =>
     {
-		Console.WriteLine($"Remote Address: {r.RemoteIpEndPoint.Address}");
-		Console.WriteLine($"Remote Port: {r.RemoteIpEndPoint.Port}");
-        Console.WriteLine("--------------***-------------");
-    },
-    ex => 
-    {
-        Console.WriteLine($"Exception: {ex}");
-    }, 
-    () => 
-    {
-        Console.WriteLine("Completed.");
+        Console.WriteLine($"{r.Method} from {r.RemoteEndPoint}");
     });
-
 ```
 
-`ErrorCorrection.HeaderCompletionError` is optional. It handles HTTP message headers that do not end with `\r\n\r\n`.
+`ErrorCorrection.HeaderCompletionError` is optional. Some SSDP/UPnP devices send messages whose header section does not end with the required empty line (`\r\n\r\n`); with the correction enabled such messages still parse. Without it they are emitted with `HasParsingErrors == true` and `IsEndOfMessage == false`. UDP messages have `Connection == null`; replying is up to you (e.g. via `UdpClient.SendAsync`).
+
+### Parse errors
+
+The listener observables never fail because of one bad client. Malformed input or a connection that closes mid-message produces an emission with `HasParsingErrors == true`, and the listener keeps serving other connections.
+
+## Breaking changes in 7.0.0
+
+7.0.0 targets .NET 10 and ships one assembly: the separate `ISimpleHttpListener.Rx` interface assembly/package is gone, as are the `IHttpCommon`/`IHttpHeaders`/`IParseControl`/`IHttpRequest`/`IHttpResponse`/`IHttpRequestReponse` interfaces. Everything lives in the `SimpleHttpListener.Rx` and `SimpleHttpListener.Rx.Model` namespaces.
+
+| v6 | v7 |
+|---|---|
+| `IHttpRequestReponse` (misspelled) interface | `HttpRequestResponse` class |
+| `RequestType` enum (`TCP`/`UDP`) | `HttpTransport` enum (`Tcp`/`Udp`) |
+| `MessageType` (from HttpMachine) | `MessageType` (own enum, `Request`/`Response`) |
+| `ResponseReason` | `ReasonPhrase` |
+| `LocalIpEndPoint` / `RemoteIpEndPoint` | `LocalEndPoint` / `RemoteEndPoint` |
+| `MemoryStream Body` | `ReadOnlyMemory<byte> Body` |
+| `TcpClient` / `ResponseStream` properties | `IHttpConnection? Connection` (`Stream`, endpoints, `Dispose`) |
+| `IsEndOfRequest` | `IsEndOfMessage` |
+| `IsUnableToParseHttp` / `IsRequestTimedOut` | `HasParsingErrors` |
+| `UserContext`, `CancellationTokenSource` | removed |
+| `Headers` (uppercase keys, last duplicate wins) | `Headers` (uppercase keys, case-insensitive lookup, duplicates comma-joined per RFC 9110 §5.2) |
+| `new HttpSender().SendTcpResponseAsync(request, response)` | `request.SendResponseAsync(response)` extension |
+| `HttpResponse.Body` (`MemoryStream`) | `HttpResponse.Body` (`ReadOnlyMemory<byte>`) |
+| `uri.Host.GetIPv4Address()` (sync) | `await uri.Host.GetIPv4AddressAsync()` |
+| `TcpClientEx` / `UriEx` / `HttpListenerEx` classes | `TcpClientExtensions` / `UriExtensions` / `HttpListenerExtensions` |
+| One message per connection, sequential handling | Multiple messages per keep-alive connection, concurrent connections (emissions interleave) |
+
+Behavior note: v6 closed every connection after one message. v7 honors keep-alive, so a consumer must respond per message; `SendResponseAsync` auto mode preserves v6-style close semantics whenever the client asked for `Connection: close` or HTTP/1.0.
+
+## History
+
+SimpleHttpListener.Rx is the successor to [Simple HTTP Listener PCL](https://github.com/1iveowl/Simple-Http-Listener-PCL). The legacy package remains available as [SimpleHttpListener](https://www.nuget.org/packages/SimpleHttpListener).

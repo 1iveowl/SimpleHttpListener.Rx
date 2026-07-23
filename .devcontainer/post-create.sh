@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-dotnet restore src/main/SimpleHttpListener.Rx.sln
+dotnet restore SimpleHttpListener.Rx.slnx
 npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code @openai/codex
 
 # The named tool-state volumes persist these settings across container rebuilds.

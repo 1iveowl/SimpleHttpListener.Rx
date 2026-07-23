@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - main
+      - develop
+      - releases/**
+    tags:
+      - v*
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore SimpleHttpListener.Rx.slnx
+
+      - name: Build
+        run: dotnet build SimpleHttpListener.Rx.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test SimpleHttpListener.Rx.slnx -c Release --no-build
+
+      - name: Pack
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            dotnet pack src/SimpleHttpListener.Rx -c Release -o artifacts -p:Version="${GITHUB_REF_NAME#v}"
+          else
+            dotnet pack src/SimpleHttpListener.Rx -c Release -o artifacts
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts/*.*nupkg
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Push to NuGet
+        run: >
+          dotnet nuget push artifacts/*.nupkg
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

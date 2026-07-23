@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>SimpleHttpListener.Rx</PackageId>
+    <Version>7.0.0</Version>
+    <Authors>1iveowl</Authors>
+    <Description>A simple Reactive Extensions (Rx) based HTTP listener for TCP, UDP and multicast, supporting HTTP keep-alive and SSDP-style datagrams.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/1iveowl/SimpleHttpListener.Rx</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/1iveowl/SimpleHttpListener.Rx</RepositoryUrl>
+    <PackageTags>http;listener;rx;reactive;observable;tcp;udp;multicast;ssdp</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="HttpMachine.PCL" Version="6.0.0" />
+    <PackageReference Include="System.Reactive" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleHttpListener.Rx.Tests" />
+  </ItemGroup>
+
+</Project>

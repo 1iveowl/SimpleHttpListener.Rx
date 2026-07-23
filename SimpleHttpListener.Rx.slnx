@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SimpleHttpListener.Rx/SimpleHttpListener.Rx.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SimpleHttpListener.Rx.Tests/SimpleHttpListener.Rx.Tests.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/SimpleHttpListener.Rx.Sample/SimpleHttpListener.Rx.Sample.csproj" />
+  </Folder>
+</Solution>
