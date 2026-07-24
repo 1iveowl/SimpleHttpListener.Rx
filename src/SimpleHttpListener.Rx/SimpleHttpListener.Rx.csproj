@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <PackageId>SimpleHttpListener.Rx</PackageId>
-    <Version>7.0.1</Version>
+    <Version>7.1.0</Version>
     <Authors>1iveowl</Authors>
     <Description>A simple Reactive Extensions (Rx) based HTTP listener for TCP, UDP and multicast, supporting HTTP keep-alive and SSDP-style datagrams.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

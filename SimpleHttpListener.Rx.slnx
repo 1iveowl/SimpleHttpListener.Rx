@@ -7,5 +7,6 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/SimpleHttpListener.Rx.Sample/SimpleHttpListener.Rx.Sample.csproj" />
+    <Project Path="samples/SimpleHttpListener.Rx.Sample.WebSocketClient/SimpleHttpListener.Rx.Sample.WebSocketClient.csproj" />
   </Folder>
 </Solution>

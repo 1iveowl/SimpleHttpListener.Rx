@@ -87,6 +87,15 @@ public sealed record HttpRequestResponse
     /// </summary>
     public IHttpConnection? Connection { get; init; }
 
+    /// <summary>
+    /// Whether this is a request asking for a protocol upgrade (<c>Connection: Upgrade</c>
+    /// plus an <c>Upgrade</c> header, e.g. a WebSocket handshake). When set for a TCP
+    /// message, the listener has stopped reading the connection and ownership has passed to
+    /// the consumer — complete the upgrade (e.g. via
+    /// <see cref="WebSocketExtensions.AcceptWebSocketAsync"/>) or dispose the connection.
+    /// </summary>
+    public bool IsUpgradeRequest { get; init; }
+
     /// <summary>Reference equality; see the class remarks.</summary>
     public bool Equals(HttpRequestResponse? other) => ReferenceEquals(this, other);
 

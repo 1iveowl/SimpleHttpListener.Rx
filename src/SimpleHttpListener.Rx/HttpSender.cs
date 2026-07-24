@@ -103,8 +103,11 @@ public static class HttpSender
             written += WriteUtf8(buffer.AsSpan(written), $"{name}: {value}\r\n");
         }
 
-        // Keep-alive framing requires an explicit length on every response, including empty ones.
-        if (!hasContentLength && !hasTransferEncoding)
+        // Keep-alive framing requires an explicit length on every response, including empty
+        // ones — except 1xx/204/304, which must not carry Content-Length (RFC 9110 §8.6).
+        var statusForbidsContentLength = response.StatusCode < 200 || response.StatusCode is 204 or 304;
+
+        if (!hasContentLength && !hasTransferEncoding && !statusForbidsContentLength)
         {
             written += WriteUtf8(buffer.AsSpan(written), $"Content-Length: {response.Body.Length}\r\n");
         }

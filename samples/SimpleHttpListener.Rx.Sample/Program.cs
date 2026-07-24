@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Net.WebSockets;
 using SimpleHttpListener.Rx;
 using SimpleHttpListener.Rx.Model;
 
@@ -18,19 +19,26 @@ using var subscription = tcpListener
         request =>
         {
             Console.WriteLine($"{request.Method} {request.Path} from {request.RemoteEndPoint} " +
-                              $"(keep-alive: {request.ShouldKeepAlive})");
+                              $"(keep-alive: {request.ShouldKeepAlive}, upgrade: {request.IsUpgradeRequest})");
 
-            // Auto mode: the connection stays open for keep-alive requests and is closed otherwise.
-            _ = request.SendResponseAsync(new HttpResponse
+            if (request.IsUpgradeRequest)
             {
-                Headers = { ["Content-Type"] = "text/plain" },
-                Body = "Hello, World"u8.ToArray()
-            });
+                _ = EchoWebSocketAsync(request);
+            }
+            else
+            {
+                // Auto mode: the connection stays open for keep-alive requests and is closed otherwise.
+                _ = request.SendResponseAsync(new HttpResponse
+                {
+                    Headers = { ["Content-Type"] = "text/plain" },
+                    Body = "Hello, World"u8.ToArray()
+                });
+            }
         },
         ex => Console.WriteLine($"Listener error: {ex}"),
         () => Console.WriteLine("Listener completed."));
 
-Console.WriteLine("Listening on http://localhost:8088 — Ctrl+C to stop.");
+Console.WriteLine("Listening on http://localhost:8088 (WebSocket echo on ws://localhost:8088) — Ctrl+C to stop.");
 
 // --- SSDP multicast listening (uncomment to try) ---
 // var udpClient = new UdpClient();
@@ -49,4 +57,39 @@ try
 }
 catch (OperationCanceledException)
 {
+}
+
+static async Task EchoWebSocketAsync(HttpRequestResponse request)
+{
+    try
+    {
+        using var webSocket = await request.AcceptWebSocketAsync();
+        Console.WriteLine("WebSocket connected — echoing.");
+
+        var buffer = new byte[4096];
+
+        while (webSocket.State == WebSocketState.Open)
+        {
+            var result = await webSocket.ReceiveAsync(buffer.AsMemory(), CancellationToken.None);
+
+            if (result.MessageType == WebSocketMessageType.Close)
+            {
+                await webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+                break;
+            }
+
+            await webSocket.SendAsync(buffer.AsMemory(0, result.Count), result.MessageType,
+                result.EndOfMessage, CancellationToken.None);
+        }
+
+        Console.WriteLine("WebSocket closed.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"WebSocket error: {ex.Message}");
+    }
+    finally
+    {
+        request.Connection?.Dispose();
+    }
 }

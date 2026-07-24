@@ -113,10 +113,13 @@ internal static class HttpMessageParser
                         break;
                     }
 
-                    if (messages.Count > 0 && !messages[^1].ShouldKeepAlive)
+                    if (messages.Count > 0
+                        && (!messages[^1].ShouldKeepAlive || messages[^1].IsUpgradeRequest))
                     {
-                        // The consumer now owns the connection; SendResponseAsync in auto
-                        // mode disposes it after replying.
+                        // The consumer now owns the connection: for Connection: close,
+                        // SendResponseAsync in auto mode disposes it after replying; for an
+                        // upgrade request, the consumer completes the handshake and the
+                        // stream stops being HTTP.
                         handedOff = true;
                         break;
                     }
@@ -229,6 +232,11 @@ internal static class HttpMessageParser
 
         var isRequest = snapshot.MessageType == MessageTypeKind.Request;
 
+        var isUpgradeRequest = isRequest
+            && headers.ContainsKey("UPGRADE")
+            && headers.TryGetValue("CONNECTION", out var connectionHeader)
+            && HasToken(connectionHeader, "upgrade");
+
         return new HttpRequestResponse
         {
             MessageType = isRequest ? MessageType.Request : MessageType.Response,
@@ -250,8 +258,22 @@ internal static class HttpMessageParser
             HasParsingErrors = false,
             LocalEndPoint = localEndPoint,
             RemoteEndPoint = remoteEndPoint,
-            Connection = connection
+            Connection = connection,
+            IsUpgradeRequest = isUpgradeRequest
         };
+    }
+
+    private static bool HasToken(string headerValue, string token)
+    {
+        foreach (var part in headerValue.AsSpan().Split(','))
+        {
+            if (headerValue.AsSpan()[part].Trim().Equals(token, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     internal static HttpRequestResponse BuildIncomplete(

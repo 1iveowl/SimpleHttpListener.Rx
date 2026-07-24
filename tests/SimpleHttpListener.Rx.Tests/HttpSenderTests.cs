@@ -124,6 +124,21 @@ public class HttpSenderTests
             () => request.SendResponseAsync(new HttpResponse()));
     }
 
+    [Theory]
+    [InlineData(101, false)]
+    [InlineData(204, false)]
+    [InlineData(304, false)]
+    [InlineData(200, true)]
+    public async Task Auto_content_length_respects_status_code_rules(int statusCode, bool expectContentLength)
+    {
+        var connection = new FakeConnection();
+
+        await connection.SendResponseAsync(new HttpResponse { StatusCode = statusCode }, closeConnection: false);
+
+        Assert.Equal(expectContentLength,
+            Encoding.ASCII.GetString(connection.WrittenBytes).Contains("Content-Length:", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Fact]
     public async Task Http10_keep_alive_response_gets_keep_alive_header()
     {

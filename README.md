@@ -98,6 +98,57 @@ var disposable = udpClient
 
 `ErrorCorrection.HeaderCompletionError` is optional. Some SSDP/UPnP devices send messages whose header section does not end with the required empty line (`\r\n\r\n`); with the correction enabled such messages still parse. Without it they are emitted with `HasParsingErrors == true` and `IsEndOfMessage == false`. UDP messages have `Connection == null`; replying is up to you (e.g. via `UdpClient.SendAsync`).
 
+### WebSockets (7.1.0+)
+
+The listener accepts incoming WebSocket connections without ASP.NET/Kestrel. A WebSocket
+handshake arrives as a normal HTTP request with `IsUpgradeRequest == true`; the listener stops
+reading that connection and hands ownership to you. Call `AcceptWebSocketAsync` to complete the
+RFC 6455 handshake and get a standard `System.Net.WebSockets.WebSocket` (all framing, ping/pong
+and close handling comes from the .NET runtime):
+
+```csharp
+var disposable = tcpListener
+    .ToHttpListenerObservable(cts.Token)
+    .Subscribe(request =>
+    {
+        if (request.IsUpgradeRequest)
+        {
+            _ = HandleWebSocketAsync(request);
+        }
+        else
+        {
+            _ = request.SendResponseAsync(new HttpResponse { Body = "Hello, World"u8.ToArray() });
+        }
+    });
+
+static async Task HandleWebSocketAsync(HttpRequestResponse request)
+{
+    try
+    {
+        using var webSocket = await request.AcceptWebSocketAsync();
+        // Standard WebSocket API from here: ReceiveAsync / SendAsync / CloseAsync…
+    }
+    finally
+    {
+        request.Connection?.Dispose(); // consumer owns the connection after the upgrade emission
+    }
+}
+```
+
+Notes and limitations:
+
+- After an upgrade request is emitted the listener no longer reads that connection — complete
+  the handshake or dispose `Connection`, even if you reject the upgrade.
+- `ws://` only: the listener runs on a raw `TcpListener` with no TLS, so browsers can only
+  connect from non-HTTPS pages. This targets LAN/local/native-app scenarios.
+- `AcceptWebSocketAsync` validates the handshake (version 13, key present) and throws
+  `InvalidOperationException` for invalid requests; sending an error response is up to you.
+- Sub-protocols are pass-through (`subProtocol` parameter), no negotiation logic.
+- For the client side of the story, see
+  [WebsocketClientLite.PCL](https://github.com/1iveowl/WebsocketClientLite.PCL) — the
+  `samples/SimpleHttpListener.Rx.Sample.WebSocketClient` project connects it to the server
+  sample's echo endpoint.
+
 ### Parse errors
 
 The listener observables never fail because of one bad client. Malformed input or a connection that closes mid-message produces an emission with `HasParsingErrors == true`, and the listener keeps serving other connections.
