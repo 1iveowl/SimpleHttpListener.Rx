@@ -49,7 +49,8 @@ Console.WriteLine("Listening on http://localhost:8088 (WebSocket echo on ws://lo
 // using var ssdpSubscription = udpClient
 //     .ToHttpListenerObservable(cts.Token, ErrorCorrection.HeaderCompletionError)
 //     .Subscribe(message =>
-//         Console.WriteLine($"SSDP {message.Method} from {message.RemoteEndPoint}"));
+//         // LocalEndPoint is the interface the datagram arrived on, not the 0.0.0.0 bind.
+//         Console.WriteLine($"SSDP {message.Method} from {message.RemoteEndPoint} on {message.LocalEndPoint}"));
 
 try
 {

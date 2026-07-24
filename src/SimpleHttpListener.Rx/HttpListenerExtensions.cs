@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Reactive.Linq;
@@ -12,6 +13,9 @@ namespace SimpleHttpListener.Rx;
 /// </summary>
 public static class HttpListenerExtensions
 {
+    /// <summary>Largest payload a UDP datagram can carry, so nothing is ever truncated.</summary>
+    private const int MaxDatagramSize = 65507;
+
     /// <summary>
     /// Listens for TCP connections and emits every HTTP message received on them.
     /// Connections are handled concurrently, and keep-alive connections emit one message
@@ -42,6 +46,13 @@ public static class HttpListenerExtensions
     /// <see langword="null"/>. Receiving starts on first subscription and stops when the
     /// last subscription is disposed (or <paramref name="cancellationToken"/> is cancelled).
     /// </summary>
+    /// <remarks>
+    /// <see cref="HttpRequestResponse.LocalEndPoint"/> reports the address the datagram was
+    /// actually delivered to rather than the socket's bound address, which matters for the
+    /// wildcard bind a multicast socket needs on macOS and Linux. For a multicast or
+    /// broadcast datagram the receiving interface is resolved from the packet's interface
+    /// index; if that cannot be determined, the bound endpoint is reported instead.
+    /// </remarks>
     /// <param name="udpClient">The client to receive datagrams on.</param>
     /// <param name="cancellationToken">Stops the listener.</param>
     /// <param name="errorCorrections">Opt-in corrections for malformed messages.</param>
@@ -56,23 +67,47 @@ public static class HttpListenerExtensions
             {
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(subscriptionToken, cancellationToken);
                 using var datagramParser = new DatagramParser();
+                using var localEndPointResolver = new UdpLocalEndPointResolver();
+
+                var socket = udpClient.Client;
+
+                UdpLocalEndPointResolver.TryEnablePacketInformation(socket);
+
+                // ReceiveMessageFromAsync, unlike ReceiveAsync, reports which address and
+                // interface the datagram arrived on.
+                var senderTemplate = new IPEndPoint(
+                    socket.AddressFamily is AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any, 0);
+
+                var buffer = ArrayPool<byte>.Shared.Rent(MaxDatagramSize);
+                IPEndPoint? boundEndPoint = null;
 
                 try
                 {
                     while (true)
                     {
-                        var result = await udpClient.ReceiveAsync(linkedCts.Token).ConfigureAwait(false);
+                        var result = await socket
+                            .ReceiveMessageFromAsync(buffer, SocketFlags.None, senderTemplate, linkedCts.Token)
+                            .ConfigureAwait(false);
+
+                        // Reading the socket's bound endpoint costs a syscall, and it cannot
+                        // change once bound — but the socket may only get bound by the first
+                        // receive, so take it here rather than before the loop.
+                        boundEndPoint ??= socket.LocalEndPoint as IPEndPoint;
 
                         observer.OnNext(datagramParser.Parse(
-                            result.Buffer,
+                            buffer.AsSpan(0, result.ReceivedBytes),
                             headerCompletionCorrection,
-                            udpClient.Client.LocalEndPoint as IPEndPoint,
-                            result.RemoteEndPoint));
+                            localEndPointResolver.Resolve(result.PacketInformation, boundEndPoint),
+                            result.RemoteEndPoint as IPEndPoint));
                     }
                 }
                 catch (OperationCanceledException)
                 {
                     observer.OnCompleted();
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(buffer);
                 }
             })
             .Publish()

@@ -153,7 +153,7 @@ internal static class HttpMessageParser
     /// reused <see cref="DatagramParser"/>.
     /// </summary>
     internal static HttpRequestResponse ParseDatagram(
-        byte[] datagram,
+        ReadOnlySpan<byte> datagram,
         bool headerCompletionCorrection,
         IPEndPoint? localEndPoint,
         IPEndPoint? remoteEndPoint)

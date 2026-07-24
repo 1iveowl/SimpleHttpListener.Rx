@@ -21,7 +21,7 @@ internal sealed class DatagramParser : IDisposable
     }
 
     public HttpRequestResponse Parse(
-        byte[] datagram,
+        ReadOnlySpan<byte> datagram,
         bool headerCompletionCorrection,
         IPEndPoint? localEndPoint,
         IPEndPoint? remoteEndPoint)

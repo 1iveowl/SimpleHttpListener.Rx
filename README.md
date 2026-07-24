@@ -17,7 +17,7 @@ SimpleHttpListener.Rx is a .NET library for HTTP message handling over applicati
 
 The library is built with [Reactive Extensions](https://reactivex.io/), exposing incoming HTTP messages as an `IObservable<HttpRequestResponse>` for asynchronous processing.
 
-Version 7.0.0 is a modernization release: .NET 10, [HttpMachine.PCL](https://www.nuget.org/packages/HttpMachine.PCL) 6.0.x span-based parsing, HTTP keep-alive with concurrent connection handling, and a cleaned-up public API. See [Breaking changes in 7.0.0](#breaking-changes-in-700) if you are upgrading. Version 7.1.0 adds [WebSocket accept support](#websockets-710) — no ASP.NET/Kestrel required.
+Version 7.0.0 is a modernization release: .NET 10, [HttpMachine.PCL](https://www.nuget.org/packages/HttpMachine.PCL) 6.0.x span-based parsing, HTTP keep-alive with concurrent connection handling, and a cleaned-up public API. See [Breaking changes in 7.0.0](#breaking-changes-in-700) if you are upgrading. Version 7.1.0 adds [WebSocket accept support](#websockets-710) — no ASP.NET/Kestrel required. Version 7.2.0 makes `LocalEndPoint` on UDP messages report [the interface the datagram was received on](#local-endpoint-of-a-received-datagram-720) instead of the socket's bound address.
 
 ## Usage
 
@@ -92,11 +92,23 @@ var disposable = udpClient
     .ToHttpListenerObservable(cts.Token, ErrorCorrection.HeaderCompletionError)
     .Subscribe(r =>
     {
-        Console.WriteLine($"{r.Method} from {r.RemoteEndPoint}");
+        Console.WriteLine($"{r.Method} from {r.RemoteEndPoint} on {r.LocalEndPoint}");
     });
 ```
 
 `ErrorCorrection.HeaderCompletionError` is optional. Some SSDP/UPnP devices send messages whose header section does not end with the required empty line (`\r\n\r\n`); with the correction enabled such messages still parse. Without it they are emitted with `HasParsingErrors == true` and `IsEndOfMessage == false`. UDP messages have `Connection == null`; replying is up to you (e.g. via `UdpClient.SendAsync`).
+
+#### Local endpoint of a received datagram (7.2.0+)
+
+`LocalEndPoint` reports the address the datagram was **actually delivered to**, not the socket's bound address, so it stays useful for the wildcard bind that multicast requires on macOS and Linux (`0.0.0.0:1900` above). It is derived per datagram from the packet information the socket reports:
+
+- **Unicast** — the packet's destination address is the receiving interface address, and is used directly.
+- **Multicast/broadcast** — the packet's destination is the group (e.g. `239.255.255.250`), so the address of the interface the datagram arrived on is resolved from its interface index instead. The interface lookup is cached and refreshed when the machine's addresses change.
+- **If resolution fails** (unknown interface index, or a NIC with no IPv4 address) the socket's bound endpoint is reported, as before. The message is always emitted; only the accuracy of `LocalEndPoint` degrades.
+
+The port is always the socket's bound port. IPv6 unicast is resolved the same way; IPv6 multicast still reports the bound endpoint.
+
+This matters when you have to hand a peer an address to call you back on — for example a UPnP GENA `CALLBACK` URL. Before 7.2.0 that would be built from `0.0.0.0` on macOS and Linux, which strict devices reject.
 
 ### WebSockets (7.1.0+)
 
