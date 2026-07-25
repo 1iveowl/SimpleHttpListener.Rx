@@ -126,10 +126,8 @@ public class EndToEndTests
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
 
+        // Teardown is synchronous: the listener is stopped by the time Dispose returns.
         subscription.Dispose();
-
-        // Give the accept loop time to observe cancellation and stop the listener.
-        await Task.Delay(250);
 
         using (var refusedClient = new TcpClient())
         {

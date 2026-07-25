@@ -1,7 +1,9 @@
 using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Runtime.CompilerServices;
 using SimpleHttpListener.Rx.Internal;
 using SimpleHttpListener.Rx.Model;
 
@@ -17,12 +19,25 @@ public static class HttpListenerExtensions
     private const int MaxDatagramSize = 65507;
 
     /// <summary>
+    /// One run gate per listener or socket instance, so subscriptions hand the listener over
+    /// even when a caller wraps the same listener in more than one observable. Weak keys: a
+    /// collected listener takes its gate with it.
+    /// </summary>
+    private static readonly ConditionalWeakTable<object, ListenerRunGate> RunGates = new();
+
+    /// <summary>
     /// Listens for TCP connections and emits every HTTP message received on them.
     /// Connections are handled concurrently, and keep-alive connections emit one message
     /// per request. The listener is started on first subscription and stopped when the last
     /// subscription is disposed (or <paramref name="cancellationToken"/> is cancelled);
     /// re-subscribing restarts it.
     /// </summary>
+    /// <remarks>
+    /// Stopping is never an error: cancelling, disposing the last subscription, or closing
+    /// the listener completes the stream rather than faulting it. Resubscribing immediately
+    /// after disposing the last subscription is safe — the new subscription waits for the
+    /// previous one to release the listener, so it always gets a working one.
+    /// </remarks>
     /// <param name="tcpListener">The listener to accept connections on.</param>
     /// <param name="cancellationToken">Stops the listener.</param>
     /// <param name="errorCorrections">Opt-in corrections for malformed messages.</param>
@@ -47,11 +62,17 @@ public static class HttpListenerExtensions
     /// last subscription is disposed (or <paramref name="cancellationToken"/> is cancelled).
     /// </summary>
     /// <remarks>
+    /// Stopping is never an error: cancelling, disposing the last subscription, or disposing
+    /// the client completes the stream rather than faulting it, and resubscribing
+    /// immediately after disposing the last subscription is safe — the new subscription
+    /// waits for the previous one to release the socket.
+    /// <para>
     /// <see cref="HttpRequestResponse.LocalEndPoint"/> reports the address the datagram was
     /// actually delivered to rather than the socket's bound address, which matters for the
     /// wildcard bind a multicast socket needs on macOS and Linux. For a multicast or
     /// broadcast datagram the receiving interface is resolved from the packet's interface
     /// index; if that cannot be determined, the bound endpoint is reported instead.
+    /// </para>
     /// </remarks>
     /// <param name="udpClient">The client to receive datagrams on.</param>
     /// <param name="cancellationToken">Stops the listener.</param>
@@ -65,7 +86,19 @@ public static class HttpListenerExtensions
 
         return Observable.Create<HttpRequestResponse>(async (observer, subscriptionToken) =>
             {
+                // Unlike the TCP listener there is nothing to start or stop here, so this
+                // run simply waits its turn: two receive loops on one socket would compete
+                // for datagrams. Nothing is lost by starting a moment later — the socket
+                // buffers what arrives meanwhile.
+                using var run = RunGateFor(udpClient).Claim();
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(subscriptionToken, cancellationToken);
+
+                if (!await TryTakeOverAsync(run, linkedCts.Token).ConfigureAwait(false))
+                {
+                    observer.OnCompleted();
+                    return;
+                }
+
                 using var datagramParser = new DatagramParser();
                 using var localEndPointResolver = new UdpLocalEndPointResolver();
 
@@ -101,7 +134,7 @@ public static class HttpListenerExtensions
                             result.RemoteEndPoint as IPEndPoint));
                     }
                 }
-                catch (OperationCanceledException)
+                catch (Exception ex) when (IsListenerStopped(ex, linkedCts.Token))
                 {
                     observer.OnCompleted();
                 }
@@ -118,28 +151,124 @@ public static class HttpListenerExtensions
         TcpListener tcpListener,
         CancellationToken externalToken)
     {
-        return Observable.Create<TcpConnection>(async (observer, subscriptionToken) =>
+        return Observable.Create<TcpConnection>(observer =>
         {
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(subscriptionToken, externalToken);
-
-            tcpListener.Start();
+            var run = RunGateFor(tcpListener).Claim();
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(externalToken);
 
             try
             {
-                while (true)
-                {
-                    var client = await tcpListener.AcceptTcpClientAsync(linkedCts.Token).ConfigureAwait(false);
-                    observer.OnNext(new TcpConnection(client));
-                }
+                // Started synchronously, so the listener is accepting by the time Subscribe
+                // returns and a caller may connect straight away.
+                tcpListener.Start();
             }
-            catch (OperationCanceledException)
+            catch (Exception ex)
             {
-                observer.OnCompleted();
+                linkedCts.Dispose();
+                run.Dispose();
+                observer.OnError(ex);
+
+                return Disposable.Empty;
             }
-            finally
+
+            _ = AcceptLoopAsync(tcpListener, observer, run, linkedCts.Token);
+
+            return Disposable.Create(() =>
             {
-                tcpListener.Stop();
-            }
+                linkedCts.Cancel();
+
+                // Stopping here rather than in the loop makes teardown synchronous: a
+                // subscription taken immediately afterwards finds the listener really free,
+                // and the loop — still unwinding — can no longer stop the listener that the
+                // next subscription has since started.
+                run.Release(tcpListener.Stop);
+                linkedCts.Dispose();
+            });
         });
     }
+
+    private static async Task AcceptLoopAsync(
+        TcpListener tcpListener,
+        IObserver<TcpConnection> observer,
+        ListenerRunGate.Run run,
+        CancellationToken token)
+    {
+        try
+        {
+            while (true)
+            {
+                var client = await tcpListener.AcceptTcpClientAsync(token).ConfigureAwait(false);
+
+                if (token.IsCancellationRequested)
+                {
+                    // Accepted as the listener was being torn down: nobody is left to own it.
+                    client.Dispose();
+
+                    break;
+                }
+
+                observer.OnNext(new TcpConnection(client));
+            }
+
+            observer.OnCompleted();
+        }
+        catch (Exception ex) when (IsListenerStopped(ex, token))
+        {
+            observer.OnCompleted();
+        }
+        catch (Exception ex)
+        {
+            observer.OnError(ex);
+        }
+        finally
+        {
+            // The loop also ends when the caller's token is cancelled, without a Dispose to
+            // stop the listener — so release it here too, if it is still ours.
+            run.Release(tcpListener.Stop);
+            run.Dispose();
+        }
+    }
+
+    private static ListenerRunGate RunGateFor(object listener) => RunGates.GetOrCreateValue(listener);
+
+    /// <summary>
+    /// Waits for the previous subscription over the same socket to finish, so two receive
+    /// loops never compete for datagrams. Returns <see langword="false"/> if this
+    /// subscription was disposed while waiting.
+    /// </summary>
+    private static async Task<bool> TryTakeOverAsync(ListenerRunGate.Run run, CancellationToken token)
+    {
+        try
+        {
+            await run.Previous.WaitAsync(token).ConfigureAwait(false);
+
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether an exception out of a pending accept or receive means the listener stopped
+    /// rather than failed. Cancelling a socket operation, or closing the socket under it,
+    /// surfaces as an <see cref="OperationCanceledException"/> on Windows but as a
+    /// <see cref="SocketException"/> ("Operation canceled") or an
+    /// <see cref="ObjectDisposedException"/> on Linux and macOS — and a shared, ref-counted
+    /// stream must not turn a stop into an error for every subscriber. A socket failure
+    /// while the listener is still meant to be running is a genuine error and still
+    /// propagates.
+    /// </summary>
+    private static bool IsListenerStopped(Exception exception, CancellationToken token) =>
+        exception switch
+        {
+            OperationCanceledException or ObjectDisposedException => true,
+            SocketException socketException =>
+                token.IsCancellationRequested
+                || socketException.SocketErrorCode is SocketError.OperationAborted
+                    or SocketError.Interrupted
+                    or SocketError.Shutdown,
+            _ => false
+        };
 }
