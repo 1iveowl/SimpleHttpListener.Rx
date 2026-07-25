@@ -17,7 +17,14 @@ SimpleHttpListener.Rx is a .NET library for HTTP message handling over applicati
 
 The library is built with [Reactive Extensions](https://reactivex.io/), exposing incoming HTTP messages as an `IObservable<HttpRequestResponse>` for asynchronous processing.
 
-Version 7.0.0 is a modernization release: .NET 10, [HttpMachine.PCL](https://www.nuget.org/packages/HttpMachine.PCL) 6.0.x span-based parsing, HTTP keep-alive with concurrent connection handling, and a cleaned-up public API. See [Breaking changes in 7.0.0](#breaking-changes-in-700) if you are upgrading. Version 7.1.0 adds [WebSocket accept support](#websockets-710) — no ASP.NET/Kestrel required. Version 7.2.0 makes `LocalEndPoint` on UDP messages report [the interface the datagram was received on](#local-endpoint-of-a-received-datagram-720) instead of the socket's bound address, and 7.3.0 makes [stop and restart](#subscription-lifecycle-730) reliable: stopping never surfaces as an error, and dispose-then-resubscribe never races the previous teardown.
+### Version highlights
+
+| Version | Highlights |
+| --- | --- |
+| **7.3.0** | [Reliable stop and restart](#subscription-lifecycle-730): stopping never surfaces as an error, and dispose-then-resubscribe never races the previous teardown. |
+| **7.2.0** | `LocalEndPoint` on UDP messages reports [the interface the datagram arrived on](#local-endpoint-of-a-received-datagram-720) rather than the socket's bound address. |
+| **7.1.0** | [WebSocket accept support](#websockets-710) — no ASP.NET/Kestrel required. |
+| **7.0.0** | Modernization release: .NET 10, [HttpMachine.PCL](https://www.nuget.org/packages/HttpMachine.PCL) 6.0.x span-based parsing, HTTP keep-alive with concurrent connection handling, and a cleaned-up public API. See [Breaking changes in 7.0.0](#breaking-changes-in-700) if you are upgrading. |
 
 ## Usage
 
