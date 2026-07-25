@@ -49,6 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       id-token: write # OIDC token for NuGet Trusted Publishing
+      contents: write # create the GitHub release for the tag
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -73,3 +74,15 @@ jobs:
           --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
+
+      # Only once the package is out, so a failed push leaves no release claiming otherwise.
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${GITHUB_REF_NAME}"
+          artifacts/*.nupkg artifacts/*.snupkg
+          --repo "${GITHUB_REPOSITORY}"
+          --title "${GITHUB_REF_NAME}"
+          --verify-tag
+          --generate-notes
