@@ -24,8 +24,14 @@ internal sealed class DatagramParser : IDisposable
         ReadOnlySpan<byte> datagram,
         bool headerCompletionCorrection,
         IPEndPoint? localEndPoint,
-        IPEndPoint? remoteEndPoint)
+        IPEndPoint? remoteEndPoint,
+        bool captureRawMessage = false)
     {
+        // Copied up front, and only here: the caller's buffer is pooled and reused, so a
+        // slice of it would decay into someone else's bytes. Nothing is allocated when
+        // capture is off.
+        var rawMessage = captureRawMessage ? datagram.ToArray() : ReadOnlyMemory<byte>.Empty;
+
         var (consumed, faulted) = HttpMessageParser.TryExecute(_parser, datagram);
         var hasError = faulted || consumed != datagram.Length;
         var neededEofSignal = false;
@@ -45,9 +51,9 @@ internal sealed class DatagramParser : IDisposable
         }
 
         var message = !hasError && _parserDelegate.CompletedMessages.TryDequeue(out var snapshot)
-            ? HttpMessageParser.Build(snapshot, HttpTransport.Udp, null, localEndPoint, remoteEndPoint)
+            ? HttpMessageParser.Build(snapshot, HttpTransport.Udp, null, localEndPoint, remoteEndPoint, rawMessage)
             : HttpMessageParser.BuildIncomplete(_parserDelegate, _parser, HttpTransport.Udp, null,
-                localEndPoint, remoteEndPoint);
+                localEndPoint, remoteEndPoint, rawMessage);
 
         if (hasError || neededEofSignal || _parserDelegate.State.HasIncompleteMessage)
         {

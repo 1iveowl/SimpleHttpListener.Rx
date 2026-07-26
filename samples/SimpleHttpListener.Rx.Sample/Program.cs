@@ -46,11 +46,17 @@ Console.WriteLine("Listening on http://localhost:8088 (WebSocket echo on ws://lo
 // udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, 1900));
 // udpClient.JoinMulticastGroup(IPAddress.Parse("239.255.255.250"));
 //
+// // CaptureRawMessage keeps each datagram verbatim — drop it for anything but diagnostics.
+// var options = new HttpListenerOptions { CaptureRawMessage = true };
+//
 // using var ssdpSubscription = udpClient
-//     .ToHttpListenerObservable(cts.Token, ErrorCorrection.HeaderCompletionError)
+//     .ToHttpListenerObservable(options, cts.Token, ErrorCorrection.HeaderCompletionError)
 //     .Subscribe(message =>
+//     {
 //         // LocalEndPoint is the interface the datagram arrived on, not the 0.0.0.0 bind.
-//         Console.WriteLine($"SSDP {message.Method} from {message.RemoteEndPoint} on {message.LocalEndPoint}"));
+//         Console.WriteLine($"SSDP {message.Method} from {message.RemoteEndPoint} on {message.LocalEndPoint}");
+//         Console.WriteLine(Encoding.ASCII.GetString(message.RawMessage.Span));
+//     });
 
 try
 {

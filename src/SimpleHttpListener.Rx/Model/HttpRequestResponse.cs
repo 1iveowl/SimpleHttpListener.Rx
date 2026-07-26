@@ -66,6 +66,27 @@ public sealed record HttpRequestResponse
     /// <summary>Message body; empty if the message has none.</summary>
     public ReadOnlyMemory<byte> Body { get; init; }
 
+    /// <summary>
+    /// The message exactly as it arrived on the wire — before parsing, normalisation or
+    /// de-chunking — when <see cref="HttpListenerOptions.CaptureRawMessage"/> is enabled.
+    /// Empty otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="Headers"/>, this preserves what the sender actually wrote: original
+    /// header name casing, field order, and repeated fields as separate lines. It matters
+    /// for SSDP, where the message is nothing but its header block, and for reporting a
+    /// parser bug with the input that produced it. Bytes rather than text, deliberately:
+    /// real devices emit sequences no encoding will decode faithfully, so decoding — always
+    /// leniently — is the consumer's call.
+    /// <para>
+    /// Populated for messages that failed to parse as well, which is usually when it is most
+    /// wanted. Never populated for TCP messages, and never an alias of an internal buffer:
+    /// it is an independent copy taken at receive time, and keeping it alive is what keeps
+    /// those bytes alive.
+    /// </para>
+    /// </remarks>
+    public ReadOnlyMemory<byte> RawMessage { get; init; }
+
     /// <summary>Whether the message was fully parsed to its end.</summary>
     public bool IsEndOfMessage { get; init; }
 

@@ -156,10 +156,12 @@ internal static class HttpMessageParser
         ReadOnlySpan<byte> datagram,
         bool headerCompletionCorrection,
         IPEndPoint? localEndPoint,
-        IPEndPoint? remoteEndPoint)
+        IPEndPoint? remoteEndPoint,
+        bool captureRawMessage = false)
     {
         using var datagramParser = new DatagramParser();
-        return datagramParser.Parse(datagram, headerCompletionCorrection, localEndPoint, remoteEndPoint);
+        return datagramParser.Parse(
+            datagram, headerCompletionCorrection, localEndPoint, remoteEndPoint, captureRawMessage);
     }
 
     internal static (int Consumed, bool Faulted) TryExecute(HttpCombinedParser parser, ReadOnlySpan<byte> data)
@@ -199,7 +201,8 @@ internal static class HttpMessageParser
         HttpTransport transport,
         IHttpConnection? connection,
         IPEndPoint? localEndPoint,
-        IPEndPoint? remoteEndPoint)
+        IPEndPoint? remoteEndPoint,
+        ReadOnlyMemory<byte> rawMessage = default)
     {
         var body = ReadOnlyMemory<byte>.Empty;
 
@@ -254,6 +257,7 @@ internal static class HttpMessageParser
             IsChunked = snapshot.IsTransferEncodingChunked,
             Headers = headers,
             Body = body,
+            RawMessage = rawMessage,
             IsEndOfMessage = snapshot.IsEndOfMessage,
             HasParsingErrors = false,
             LocalEndPoint = localEndPoint,
@@ -282,7 +286,8 @@ internal static class HttpMessageParser
         HttpTransport transport,
         IHttpConnection? connection,
         IPEndPoint? localEndPoint = null,
-        IPEndPoint? remoteEndPoint = null)
+        IPEndPoint? remoteEndPoint = null,
+        ReadOnlyMemory<byte> rawMessage = default)
     {
         return new HttpRequestResponse
         {
@@ -291,6 +296,7 @@ internal static class HttpMessageParser
             MajorVersion = parser.MajorVersion,
             MinorVersion = parser.MinorVersion,
             Headers = FrozenDictionary<string, string>.Empty,
+            RawMessage = rawMessage,
             IsEndOfMessage = false,
             HasParsingErrors = true,
             LocalEndPoint = localEndPoint ?? connection?.LocalEndPoint,

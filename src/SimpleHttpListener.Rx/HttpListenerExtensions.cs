@@ -25,6 +25,9 @@ public static class HttpListenerExtensions
     /// </summary>
     private static readonly ConditionalWeakTable<object, ListenerRunGate> RunGates = new();
 
+    /// <summary>Shared, so the overloads without options allocate nothing extra.</summary>
+    private static readonly HttpListenerOptions DefaultOptions = new();
+
     /// <summary>
     /// Listens for TCP connections and emits every HTTP message received on them.
     /// Connections are handled concurrently, and keep-alive connections emit one message
@@ -44,8 +47,26 @@ public static class HttpListenerExtensions
     public static IObservable<HttpRequestResponse> ToHttpListenerObservable(
         this TcpListener tcpListener,
         CancellationToken cancellationToken = default,
+        params ErrorCorrection[] errorCorrections) =>
+        tcpListener.ToHttpListenerObservable(DefaultOptions, cancellationToken, errorCorrections);
+
+    /// <inheritdoc cref="ToHttpListenerObservable(TcpListener, CancellationToken, ErrorCorrection[])"/>
+    /// <param name="tcpListener">The listener to accept connections on.</param>
+    /// <param name="options">
+    /// Listener options. Note that <see cref="HttpListenerOptions.CaptureRawMessage"/> has
+    /// no effect here: a TCP message is framed out of a stream, so
+    /// <see cref="HttpRequestResponse.RawMessage"/> stays empty for TCP messages.
+    /// </param>
+    /// <param name="cancellationToken">Stops the listener.</param>
+    /// <param name="errorCorrections">Opt-in corrections for malformed messages.</param>
+    public static IObservable<HttpRequestResponse> ToHttpListenerObservable(
+        this TcpListener tcpListener,
+        HttpListenerOptions options,
+        CancellationToken cancellationToken = default,
         params ErrorCorrection[] errorCorrections)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         var headerCompletionCorrection = errorCorrections.Contains(ErrorCorrection.HeaderCompletionError);
 
         return AcceptConnections(tcpListener, cancellationToken)
@@ -80,9 +101,27 @@ public static class HttpListenerExtensions
     public static IObservable<HttpRequestResponse> ToHttpListenerObservable(
         this UdpClient udpClient,
         CancellationToken cancellationToken = default,
+        params ErrorCorrection[] errorCorrections) =>
+        udpClient.ToHttpListenerObservable(DefaultOptions, cancellationToken, errorCorrections);
+
+    /// <inheritdoc cref="ToHttpListenerObservable(UdpClient, CancellationToken, ErrorCorrection[])"/>
+    /// <param name="udpClient">The client to receive datagrams on.</param>
+    /// <param name="options">
+    /// Listener options — set <see cref="HttpListenerOptions.CaptureRawMessage"/> to have
+    /// each datagram's bytes carried on <see cref="HttpRequestResponse.RawMessage"/>.
+    /// </param>
+    /// <param name="cancellationToken">Stops the listener.</param>
+    /// <param name="errorCorrections">Opt-in corrections for malformed messages.</param>
+    public static IObservable<HttpRequestResponse> ToHttpListenerObservable(
+        this UdpClient udpClient,
+        HttpListenerOptions options,
+        CancellationToken cancellationToken = default,
         params ErrorCorrection[] errorCorrections)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         var headerCompletionCorrection = errorCorrections.Contains(ErrorCorrection.HeaderCompletionError);
+        var captureRawMessage = options.CaptureRawMessage;
 
         return Observable.Create<HttpRequestResponse>(async (observer, subscriptionToken) =>
             {
@@ -131,7 +170,8 @@ public static class HttpListenerExtensions
                             buffer.AsSpan(0, result.ReceivedBytes),
                             headerCompletionCorrection,
                             localEndPointResolver.Resolve(result.PacketInformation, boundEndPoint),
-                            result.RemoteEndPoint as IPEndPoint));
+                            result.RemoteEndPoint as IPEndPoint,
+                            captureRawMessage));
                     }
                 }
                 catch (Exception ex) when (IsListenerStopped(ex, linkedCts.Token))

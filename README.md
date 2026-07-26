@@ -21,6 +21,7 @@ The library is built with [Reactive Extensions](https://reactivex.io/), exposing
 
 | Version | Highlights |
 | --- | --- |
+| **7.4.0** | [Opt-in raw wire capture](#raw-message-capture-740): each UDP message's bytes exactly as received, for diagnostics and bug reports. |
 | **7.3.0** | [Reliable stop and restart](#subscription-lifecycle-730): stopping never surfaces as an error, and dispose-then-resubscribe never races the previous teardown. |
 | **7.2.0** | `LocalEndPoint` on UDP messages reports [the interface the datagram arrived on](#local-endpoint-of-a-received-datagram-720) rather than the socket's bound address. |
 | **7.1.0** | [WebSocket accept support](#websockets-710) — no ASP.NET/Kestrel required. |
@@ -123,6 +124,32 @@ var disposable = udpClient
 The port is always the socket's bound port. IPv6 unicast is resolved the same way; IPv6 multicast still reports the bound endpoint.
 
 This matters when you have to hand a peer an address to call you back on — for example a UPnP GENA `CALLBACK` URL. Before 7.2.0 that would be built from `0.0.0.0` on macOS and Linux, which strict devices reject.
+
+#### Raw message capture (7.4.0+)
+
+`HttpRequestResponse` gives you a parsed, normalised view — header names are upper-cased, repeated fields are comma-joined, field order is gone. For SSDP that loses the message itself: a datagram has no body, so the header block *is* the message. Enable capture to keep the bytes as they arrived:
+
+```csharp
+var options = new HttpListenerOptions { CaptureRawMessage = true };
+
+var disposable = udpClient
+    .ToHttpListenerObservable(options, cts.Token, ErrorCorrection.HeaderCompletionError)
+    .Subscribe(message =>
+    {
+        // Decode leniently: real devices emit bytes no encoding decodes faithfully.
+        var wire = Encoding.ASCII.GetString(message.RawMessage.Span);
+        Console.WriteLine(wire);
+    });
+```
+
+`RawMessage` is the message before parsing, normalisation or de-chunking, so original casing (`Cache-Control:`), field order, and repeated fields all survive — which is what makes a bug report against a parser reproducible. It is `ReadOnlyMemory<byte>` rather than a string on purpose: decoding is the consumer's call.
+
+- **Off by default**, and free when off — no copy, no allocation on the receive path.
+- **Always a copy**, never a slice of the pooled receive buffer, so it stays valid for as long as you hold the message.
+- **Populated for messages that failed to parse too** (`HasParsingErrors == true`) — usually when you want it most. Every datagram is emitted, parsable or not.
+- **Observational only**: enabling it changes no parsed value, no framing, and no emission.
+- **UDP only.** A TCP message is framed out of a stream and may span reads, so attributing bytes to it would only be approximate; `RawMessage` stays empty for TCP messages, and the `HttpListenerOptions` overload for `TcpListener` exists only for future options.
+- **Retention is yours.** A chatty SSDP network emits a lot of datagrams; holding every message keeps every captured buffer alive. Long-running capture belongs in a file log, not in memory.
 
 ### WebSockets (7.1.0+)
 
