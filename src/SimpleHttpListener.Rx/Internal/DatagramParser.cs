@@ -1,6 +1,8 @@
 using System.Net;
 using HttpMachine;
 using SimpleHttpListener.Rx.Model;
+// Both namespaces spell this one; unqualified always means ours.
+using UnframedResponseMode = SimpleHttpListener.Rx.Model.UnframedResponseMode;
 
 namespace SimpleHttpListener.Rx.Internal;
 
@@ -11,13 +13,16 @@ namespace SimpleHttpListener.Rx.Internal;
 /// </summary>
 internal sealed class DatagramParser : IDisposable
 {
+    private readonly UnframedResponseMode _unframedResponseMode;
+
     private ListenerParserDelegate _parserDelegate;
     private HttpCombinedParser _parser;
 
-    public DatagramParser()
+    public DatagramParser(UnframedResponseMode unframedResponseMode = UnframedResponseMode.CompleteAtHeaders)
     {
+        _unframedResponseMode = unframedResponseMode;
         _parserDelegate = new ListenerParserDelegate();
-        _parser = new HttpCombinedParser(_parserDelegate);
+        _parser = CreateParser();
     }
 
     public HttpRequestResponse Parse(
@@ -68,8 +73,11 @@ internal sealed class DatagramParser : IDisposable
     {
         Dispose();
         _parserDelegate = new ListenerParserDelegate();
-        _parser = new HttpCombinedParser(_parserDelegate);
+        _parser = CreateParser();
     }
+
+    private HttpCombinedParser CreateParser() =>
+        new(_parserDelegate, HttpMessageParser.ToParserMode(_unframedResponseMode));
 
     public void Dispose()
     {

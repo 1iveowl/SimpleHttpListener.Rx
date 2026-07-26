@@ -70,8 +70,8 @@ public static class HttpListenerExtensions
         var headerCompletionCorrection = errorCorrections.Contains(ErrorCorrection.HeaderCompletionError);
 
         return AcceptConnections(tcpListener, cancellationToken)
-            .SelectMany(connection =>
-                HttpMessageParser.ParseConnection(connection, headerCompletionCorrection, cancellationToken))
+            .SelectMany(connection => HttpMessageParser.ParseConnection(
+                connection, headerCompletionCorrection, cancellationToken, options.UnframedResponseMode))
             .Publish()
             .RefCount();
     }
@@ -138,7 +138,7 @@ public static class HttpListenerExtensions
                     return;
                 }
 
-                using var datagramParser = new DatagramParser();
+                using var datagramParser = new DatagramParser(options.UnframedResponseMode);
                 using var localEndPointResolver = new UdpLocalEndPointResolver();
 
                 var socket = udpClient.Client;

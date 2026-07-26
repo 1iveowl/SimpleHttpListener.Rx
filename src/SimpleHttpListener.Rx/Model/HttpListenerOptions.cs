@@ -26,4 +26,18 @@ public sealed record HttpListenerOptions
     /// </para>
     /// </remarks>
     public bool CaptureRawMessage { get; init; }
+
+    /// <summary>
+    /// How to frame a response that carries neither <c>Content-Length</c> nor
+    /// <c>Transfer-Encoding</c>. Defaults to
+    /// <see cref="Model.UnframedResponseMode.CompleteAtHeaders"/>, which is what SSDP needs
+    /// and what every earlier version did.
+    /// </summary>
+    /// <remarks>
+    /// Only worth changing for a stream that carries HTTP/1.0 style responses whose body
+    /// ends when the connection closes: under the default those bodies are not read, and the
+    /// bytes are taken as the start of the next message. Requests are unaffected either way
+    /// — a request without framing headers has no body (RFC 9112 §6).
+    /// </remarks>
+    public UnframedResponseMode UnframedResponseMode { get; init; }
 }

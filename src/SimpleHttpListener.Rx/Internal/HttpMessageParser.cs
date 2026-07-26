@@ -6,6 +6,9 @@ using System.Reactive.Linq;
 using HttpMachine;
 using SimpleHttpListener.Rx.Model;
 using UpstreamMessage = IHttpMachine.Model.HttpRequestResponse;
+using UpstreamUnframedResponseMode = HttpMachine.UnframedResponseMode;
+// Both namespaces spell this one; unqualified always means ours.
+using UnframedResponseMode = SimpleHttpListener.Rx.Model.UnframedResponseMode;
 
 namespace SimpleHttpListener.Rx.Internal;
 
@@ -25,14 +28,15 @@ internal static class HttpMessageParser
     internal static IObservable<HttpRequestResponse> ParseConnection(
         IHttpConnection connection,
         bool headerCompletionCorrection,
-        CancellationToken externalToken)
+        CancellationToken externalToken,
+        UnframedResponseMode unframedResponseMode = UnframedResponseMode.CompleteAtHeaders)
     {
         return Observable.Create<HttpRequestResponse>(async (observer, subscriptionToken) =>
         {
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(subscriptionToken, externalToken);
 
             using var parserDelegate = new ListenerParserDelegate();
-            using var parser = new HttpCombinedParser(parserDelegate);
+            using var parser = new HttpCombinedParser(parserDelegate, ToParserMode(unframedResponseMode));
             var buffer = ArrayPool<byte>.Shared.Rent(ReadBufferSize);
             var handedOff = false;
 
@@ -152,12 +156,25 @@ internal static class HttpMessageParser
         bool headerCompletionCorrection,
         IPEndPoint? localEndPoint,
         IPEndPoint? remoteEndPoint,
-        bool captureRawMessage = false)
+        bool captureRawMessage = false,
+        UnframedResponseMode unframedResponseMode = UnframedResponseMode.CompleteAtHeaders)
     {
-        using var datagramParser = new DatagramParser();
+        using var datagramParser = new DatagramParser(unframedResponseMode);
         return datagramParser.Parse(
             datagram, headerCompletionCorrection, localEndPoint, remoteEndPoint, captureRawMessage);
     }
+
+    /// <summary>
+    /// Maps to the parser's own enum rather than exposing it, so the public API does not
+    /// change shape when the parser package does. Mapped explicitly, not cast: the values
+    /// happening to line up today is not a contract.
+    /// </summary>
+    internal static UpstreamUnframedResponseMode ToParserMode(UnframedResponseMode mode) =>
+        mode switch
+        {
+            UnframedResponseMode.CloseDelimited => UpstreamUnframedResponseMode.CloseDelimited,
+            _ => UpstreamUnframedResponseMode.CompleteAtHeaders
+        };
 
     /// <summary>
     /// Tells the parser no more bytes are coming, which completes a body delimited by end of

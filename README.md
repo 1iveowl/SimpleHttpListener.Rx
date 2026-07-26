@@ -21,7 +21,7 @@ The library is built with [Reactive Extensions](https://reactivex.io/), exposing
 
 | Version | Highlights |
 | --- | --- |
-| **7.4.0** | [Opt-in raw wire capture](#raw-message-capture-740): each UDP message's bytes exactly as received, for diagnostics and bug reports. |
+| **7.4.0** | [Listener options](#listener-options-740): opt-in [raw wire capture](#raw-message-capture-740) of each UDP message's bytes as received, and opt-in RFC 9112 §6.3 framing for unframed response bodies. |
 | **7.3.0** | [Reliable stop and restart](#subscription-lifecycle-730): stopping never surfaces as an error, and dispose-then-resubscribe never races the previous teardown. |
 | **7.2.0** | `LocalEndPoint` on UDP messages reports [the interface the datagram arrived on](#local-endpoint-of-a-received-datagram-720) rather than the socket's bound address. |
 | **7.1.0** | [WebSocket accept support](#websockets-710) — no ASP.NET/Kestrel required. |
@@ -150,6 +150,34 @@ var disposable = udpClient
 - **Observational only**: enabling it changes no parsed value, no framing, and no emission.
 - **UDP only.** A TCP message is framed out of a stream and may span reads, so attributing bytes to it would only be approximate; `RawMessage` stays empty for TCP messages, and the `HttpListenerOptions` overload for `TcpListener` exists only for future options.
 - **Retention is yours.** A chatty SSDP network emits a lot of datagrams; holding every message keeps every captured buffer alive. Long-running capture belongs in a file log, not in memory.
+
+### Listener options (7.4.0+)
+
+Both `ToHttpListenerObservable` overloads accept an optional `HttpListenerOptions`. Every default matches the behaviour of the overloads without it, so options only ever add something you asked for:
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `CaptureRawMessage` | `false` | Carry each message's bytes as received on [`RawMessage`](#raw-message-capture-740). UDP only. |
+| `UnframedResponseMode` | `CompleteAtHeaders` | How to frame a response with neither `Content-Length` nor `Transfer-Encoding` (see below). |
+
+```csharp
+var options = new HttpListenerOptions
+{
+    CaptureRawMessage = true,
+    UnframedResponseMode = UnframedResponseMode.CloseDelimited
+};
+
+var disposable = tcpListener.ToHttpListenerObservable(options, cts.Token).Subscribe(/* ... */);
+```
+
+#### Unframed response bodies
+
+A response that carries neither `Content-Length` nor `Transfer-Encoding` has no self-evident end, and the two legal readings serve different protocols:
+
+- **`CompleteAtHeaders`** (default) — the message ends at the blank line. This is what SSDP/HTTPU needs, since those responses are bodyless, and it is what every version before 7.4.0 did. If such a response *does* carry a body, those bytes are read as the start of the next message.
+- **`CloseDelimited`** — the body runs to the end of the input, per RFC 9112 §6.3: the framing an HTTP/1.0 style response that ends by closing the connection needs. Enable it only for a stream you know carries such responses, since every unframed response then waits for the input to end before completing.
+
+Requests are unaffected either way: a request with no framing headers has no body (RFC 9112 §6), and completes immediately under both modes.
 
 ### WebSockets (7.1.0+)
 
