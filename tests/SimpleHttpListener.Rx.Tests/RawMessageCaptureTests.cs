@@ -5,6 +5,7 @@ using System.Reactive.Threading.Tasks;
 using System.Text;
 using SimpleHttpListener.Rx.Internal;
 using SimpleHttpListener.Rx.Model;
+using SimpleHttpListener.Rx.Tests.TestHelpers;
 using Xunit;
 
 namespace SimpleHttpListener.Rx.Tests;
@@ -14,8 +15,6 @@ namespace SimpleHttpListener.Rx.Tests;
 /// </summary>
 public class RawMessageCaptureTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
-
     /// <summary>
     /// A real SSDP response, mixed-case header names and all — the detail the parsed view
     /// necessarily loses.
@@ -117,7 +116,7 @@ public class RawMessageCaptureTests
     public async Task Udp_listener_captures_the_datagram_when_enabled()
     {
         using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
-        var port = ((IPEndPoint)receiver.Client.LocalEndPoint!).Port;
+        var port = receiver.LocalPort();
 
         var firstMessage = receiver
             .ToHttpListenerObservable(new HttpListenerOptions { CaptureRawMessage = true })
@@ -127,9 +126,9 @@ public class RawMessageCaptureTests
         var datagram = SsdpBytes();
 
         using var sender = new UdpClient();
-        await sender.SendAsync(datagram, new IPEndPoint(IPAddress.Loopback, port)).AsTask().WaitAsync(Timeout);
+        await sender.SendAsync(datagram, new IPEndPoint(IPAddress.Loopback, port)).AsTask().WaitAsync(TestNetwork.Timeout);
 
-        var message = await firstMessage.WaitAsync(Timeout);
+        var message = await firstMessage.WaitAsync(TestNetwork.Timeout);
 
         // Exactly the datagram: not a slice of the 64 KiB pooled receive buffer.
         Assert.Equal(datagram, message.RawMessage.ToArray());
@@ -140,14 +139,14 @@ public class RawMessageCaptureTests
     public async Task Udp_listener_leaves_raw_message_empty_by_default()
     {
         using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
-        var port = ((IPEndPoint)receiver.Client.LocalEndPoint!).Port;
+        var port = receiver.LocalPort();
 
         var firstMessage = receiver.ToHttpListenerObservable().FirstAsync().ToTask();
 
         using var sender = new UdpClient();
-        await sender.SendAsync(SsdpBytes(), new IPEndPoint(IPAddress.Loopback, port)).AsTask().WaitAsync(Timeout);
+        await sender.SendAsync(SsdpBytes(), new IPEndPoint(IPAddress.Loopback, port)).AsTask().WaitAsync(TestNetwork.Timeout);
 
-        var message = await firstMessage.WaitAsync(Timeout);
+        var message = await firstMessage.WaitAsync(TestNetwork.Timeout);
 
         Assert.True(message.RawMessage.IsEmpty);
         Assert.Equal(200, message.StatusCode);
@@ -156,11 +155,7 @@ public class RawMessageCaptureTests
     [Fact]
     public async Task Tcp_messages_carry_no_raw_bytes_even_when_capture_is_enabled()
     {
-        using var probe = new TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-        probe.Stop();
-
+        var port = TestNetwork.GetFreePort();
         var tcpListener = new TcpListener(IPAddress.Loopback, port);
 
         var firstMessage = tcpListener
@@ -170,9 +165,9 @@ public class RawMessageCaptureTests
             .ToTask();
 
         using var httpClient = new HttpClient();
-        await httpClient.GetAsync($"http://127.0.0.1:{port}/raw").WaitAsync(Timeout);
+        await httpClient.GetAsync($"http://127.0.0.1:{port}/raw").WaitAsync(TestNetwork.Timeout);
 
-        var message = await firstMessage.WaitAsync(Timeout);
+        var message = await firstMessage.WaitAsync(TestNetwork.Timeout);
 
         // Documented limitation: a TCP message is framed out of a stream.
         Assert.True(message.RawMessage.IsEmpty);

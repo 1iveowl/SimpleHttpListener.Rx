@@ -5,6 +5,7 @@ using System.Reactive.Linq;
 using System.Reactive.Threading.Tasks;
 using SimpleHttpListener.Rx.Internal;
 using SimpleHttpListener.Rx.Model;
+using SimpleHttpListener.Rx.Tests.TestHelpers;
 using Xunit;
 
 namespace SimpleHttpListener.Rx.Tests;
@@ -16,26 +17,21 @@ namespace SimpleHttpListener.Rx.Tests;
 /// </summary>
 public class UdpLocalEndPointTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
-
-    private static readonly byte[] Datagram =
-        "NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nNT: upnp:rootdevice\r\n\r\n"u8.ToArray();
-
     [Fact]
     public async Task Udp_reports_receiving_interface_not_wildcard_bind()
     {
         // Bound to the wildcard address, exactly as a multicast listener must be.
         using var receiver = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
-        var port = ((IPEndPoint)receiver.Client.LocalEndPoint!).Port;
+        var port = receiver.LocalPort();
 
         var firstMessage = receiver.ToHttpListenerObservable()
             .FirstAsync()
             .ToTask();
 
         using var sender = new UdpClient();
-        await sender.SendAsync(Datagram, new IPEndPoint(IPAddress.Loopback, port)).AsTask().WaitAsync(Timeout);
+        await sender.SendAsync(TestNetwork.SsdpNotify(), new IPEndPoint(IPAddress.Loopback, port)).AsTask().WaitAsync(TestNetwork.Timeout);
 
-        var message = await firstMessage.WaitAsync(Timeout);
+        var message = await firstMessage.WaitAsync(TestNetwork.Timeout);
 
         Assert.NotNull(message.LocalEndPoint);
         Assert.Equal(IPAddress.Loopback, message.LocalEndPoint.Address);
@@ -47,7 +43,7 @@ public class UdpLocalEndPointTests
     public async Task Udp_keeps_receiving_after_the_first_datagram()
     {
         using var receiver = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
-        var port = ((IPEndPoint)receiver.Client.LocalEndPoint!).Port;
+        var port = receiver.LocalPort();
 
         var twoMessages = receiver.ToHttpListenerObservable()
             .Take(2)
@@ -57,10 +53,10 @@ public class UdpLocalEndPointTests
         using var sender = new UdpClient();
         var destination = new IPEndPoint(IPAddress.Loopback, port);
 
-        await sender.SendAsync(Datagram, destination).AsTask().WaitAsync(Timeout);
-        await sender.SendAsync(Datagram, destination).AsTask().WaitAsync(Timeout);
+        await sender.SendAsync(TestNetwork.SsdpNotify(), destination).AsTask().WaitAsync(TestNetwork.Timeout);
+        await sender.SendAsync(TestNetwork.SsdpNotify(), destination).AsTask().WaitAsync(TestNetwork.Timeout);
 
-        var messages = await twoMessages.WaitAsync(Timeout);
+        var messages = await twoMessages.WaitAsync(TestNetwork.Timeout);
 
         Assert.Equal(2, messages.Count);
         Assert.All(messages, message => Assert.Equal(IPAddress.Loopback, message.LocalEndPoint!.Address));
@@ -142,7 +138,7 @@ public class UdpLocalEndPointTests
         var bound = new IPEndPoint(IPAddress.Any, 1900);
 
         var message = HttpMessageParser.ParseDatagram(
-            Datagram, false, bound, new IPEndPoint(IPAddress.Loopback, 55555));
+            TestNetwork.SsdpNotify(), false, bound, new IPEndPoint(IPAddress.Loopback, 55555));
 
         Assert.False(message.HasParsingErrors);
         Assert.Equal("NOTIFY", message.Method);

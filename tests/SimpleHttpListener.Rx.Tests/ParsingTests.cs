@@ -11,8 +11,6 @@ namespace SimpleHttpListener.Rx.Tests;
 
 public class ParsingTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
-
     private static async Task<IList<HttpRequestResponse>> ParseAsync(
         string payload,
         int[]? chunkSizes = null,
@@ -25,7 +23,7 @@ public class ParsingTests
             .ParseConnection(connection, headerCompletionCorrection, CancellationToken.None)
             .ToList()
             .ToTask()
-            .WaitAsync(Timeout);
+            .WaitAsync(TestNetwork.Timeout);
     }
 
     // 1
@@ -173,7 +171,7 @@ public class ParsingTests
             .ParseConnection(connection, false, CancellationToken.None)
             .FirstAsync()
             .ToTask()
-            .WaitAsync(Timeout);
+            .WaitAsync(TestNetwork.Timeout);
 
         Assert.Equal("/fast", message.Path);
         Assert.True(message.IsEndOfMessage);

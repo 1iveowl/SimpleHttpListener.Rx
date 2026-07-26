@@ -15,8 +15,6 @@ namespace SimpleHttpListener.Rx.Tests;
 
 public class WebSocketTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
-
     private const string SampleKey = "dGhlIHNhbXBsZSBub25jZQ==";
     private const string SampleAccept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=";
 
@@ -29,7 +27,7 @@ public class WebSocketTests
             .ParseConnection(connection, false, CancellationToken.None)
             .ToList()
             .ToTask()
-            .WaitAsync(Timeout);
+            .WaitAsync(TestNetwork.Timeout);
     }
 
     private static HttpRequestResponse UpgradeRequest(
@@ -130,7 +128,7 @@ public class WebSocketTests
             .ParseConnection(connection, false, CancellationToken.None)
             .ToList()
             .ToTask()
-            .WaitAsync(Timeout);
+            .WaitAsync(TestNetwork.Timeout);
 
         var message = Assert.Single(messages);
         Assert.True(message.IsUpgradeRequest);
@@ -185,33 +183,33 @@ public class WebSocketTests
     [Fact]
     public async Task End_to_end_echo_with_ClientWebSocket()
     {
-        var port = GetFreePort();
+        var port = TestNetwork.GetFreePort();
         var tcpListener = new TcpListener(IPAddress.Loopback, port);
 
         using var subscription = tcpListener.ToHttpListenerObservable().Subscribe(EchoWebSocket);
 
         using var client = new ClientWebSocket();
-        await client.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws"), CancellationToken.None).WaitAsync(Timeout);
+        await client.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws"), CancellationToken.None).WaitAsync(TestNetwork.Timeout);
 
         await client.SendAsync("ping"u8.ToArray(), WebSocketMessageType.Text, true, CancellationToken.None)
-            .WaitAsync(Timeout);
+            .WaitAsync(TestNetwork.Timeout);
 
         var buffer = new byte[1024];
-        var result = await client.ReceiveAsync(buffer.AsMemory(), CancellationToken.None).AsTask().WaitAsync(Timeout);
+        var result = await client.ReceiveAsync(buffer.AsMemory(), CancellationToken.None).AsTask().WaitAsync(TestNetwork.Timeout);
         Assert.Equal("ping", Encoding.UTF8.GetString(buffer, 0, result.Count));
 
-        await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None).WaitAsync(Timeout);
+        await client.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None).WaitAsync(TestNetwork.Timeout);
 
         // The same listener still serves plain HTTP afterwards.
         using var httpClient = new HttpClient();
-        var response = await httpClient.GetAsync($"http://127.0.0.1:{port}/plain").WaitAsync(Timeout);
+        var response = await httpClient.GetAsync($"http://127.0.0.1:{port}/plain").WaitAsync(TestNetwork.Timeout);
         Assert.Equal("plain", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]
     public async Task End_to_end_echo_with_WebsocketClientLite()
     {
-        var port = GetFreePort();
+        var port = TestNetwork.GetFreePort();
         var tcpListener = new TcpListener(IPAddress.Loopback, port);
 
         using var subscription = tcpListener.ToHttpListenerObservable().Subscribe(EchoWebSocket);
@@ -236,15 +234,7 @@ public class WebSocketTests
                 },
                 ex => echoed.TrySetException(ex));
 
-        Assert.Equal("interop", await echoed.Task.WaitAsync(Timeout));
+        Assert.Equal("interop", await echoed.Task.WaitAsync(TestNetwork.Timeout));
     }
 
-    private static int GetFreePort()
-    {
-        using var probe = new TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-        probe.Stop();
-        return port;
-    }
 }

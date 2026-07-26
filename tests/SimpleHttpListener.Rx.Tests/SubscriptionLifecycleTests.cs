@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Net.Sockets;
 using System.Reactive.Linq;
 using SimpleHttpListener.Rx.Model;
+using SimpleHttpListener.Rx.Tests.TestHelpers;
 using Xunit;
 
 namespace SimpleHttpListener.Rx.Tests;
@@ -14,20 +15,6 @@ namespace SimpleHttpListener.Rx.Tests;
 /// </summary>
 public class SubscriptionLifecycleTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
-
-    private static readonly byte[] Datagram =
-        "NOTIFY * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nNT: upnp:rootdevice\r\n\r\n"u8.ToArray();
-
-    private static int GetFreePort()
-    {
-        using var probe = new TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-        probe.Stop();
-        return port;
-    }
-
     /// <summary>Records the terminal notification so a test can tell "stopped" from "failed".</summary>
     private sealed class Termination
     {
@@ -48,49 +35,46 @@ public class SubscriptionLifecycleTests
                 () => _terminated.TrySetResult());
     }
 
-    private static void RespondWithHelloWorld(HttpRequestResponse request) =>
-        _ = request.SendResponseAsync(new HttpResponse { Body = "Hello, World"u8.ToArray() });
-
     [Fact]
     public async Task Tcp_cancellation_while_accept_pending_completes_without_error()
     {
         using var cts = new CancellationTokenSource();
-        var tcpListener = new TcpListener(IPAddress.Loopback, GetFreePort());
+        var tcpListener = new TcpListener(IPAddress.Loopback, TestNetwork.GetFreePort());
         var termination = new Termination();
 
         using var subscription = termination.Subscribe(tcpListener.ToHttpListenerObservable(cts.Token));
 
         // Let the accept loop reach its pending accept before pulling the rug out.
-        await WaitUntilListeningAsync(tcpListener);
+        await WaitUntilAcceptPendingAsync(tcpListener);
 
         await cts.CancelAsync();
 
-        await termination.Terminated.WaitAsync(Timeout);
+        await termination.Terminated.WaitAsync(TestNetwork.Timeout);
         Assert.Empty(termination.Errors);
     }
 
     [Fact]
     public async Task Tcp_listener_stopped_under_pending_accept_completes_without_error()
     {
-        var tcpListener = new TcpListener(IPAddress.Loopback, GetFreePort());
+        var tcpListener = new TcpListener(IPAddress.Loopback, TestNetwork.GetFreePort());
         var termination = new Termination();
 
         using var subscription = termination.Subscribe(tcpListener.ToHttpListenerObservable());
 
-        await WaitUntilListeningAsync(tcpListener);
+        await WaitUntilAcceptPendingAsync(tcpListener);
 
         // Closing the socket under a pending accept surfaces as SocketException or
         // ObjectDisposedException rather than OperationCanceledException on Linux/macOS.
         tcpListener.Stop();
 
-        await termination.Terminated.WaitAsync(Timeout);
+        await termination.Terminated.WaitAsync(TestNetwork.Timeout);
         Assert.Empty(termination.Errors);
     }
 
     [Fact]
     public async Task Tcp_dispose_then_immediate_resubscribe_keeps_working()
     {
-        var port = GetFreePort();
+        var port = TestNetwork.GetFreePort();
         var tcpListener = new TcpListener(IPAddress.Loopback, port);
         var listener = tcpListener.ToHttpListenerObservable();
         var errors = new ConcurrentQueue<Exception>();
@@ -103,7 +87,7 @@ public class SubscriptionLifecycleTests
                 request =>
                 {
                     requests.Enqueue(request);
-                    RespondWithHelloWorld(request);
+                    TestNetwork.SendHelloWorld(request);
                 },
                 errors.Enqueue);
 
@@ -111,7 +95,7 @@ public class SubscriptionLifecycleTests
             {
                 var response = await httpClient
                     .GetAsync($"http://127.0.0.1:{port}/generation{generation}")
-                    .WaitAsync(Timeout);
+                    .WaitAsync(TestNetwork.Timeout);
 
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
                 Assert.Equal("Hello, World", await response.Content.ReadAsStringAsync());
@@ -138,7 +122,7 @@ public class SubscriptionLifecycleTests
 
         await cts.CancelAsync();
 
-        await termination.Terminated.WaitAsync(Timeout);
+        await termination.Terminated.WaitAsync(TestNetwork.Timeout);
         Assert.Empty(termination.Errors);
     }
 
@@ -155,7 +139,7 @@ public class SubscriptionLifecycleTests
 
         udpClient.Dispose();
 
-        await termination.Terminated.WaitAsync(Timeout);
+        await termination.Terminated.WaitAsync(TestNetwork.Timeout);
         Assert.Empty(termination.Errors);
     }
 
@@ -163,7 +147,7 @@ public class SubscriptionLifecycleTests
     public async Task Udp_dispose_then_immediate_resubscribe_keeps_working()
     {
         using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
-        var port = ((IPEndPoint)receiver.Client.LocalEndPoint!).Port;
+        var port = receiver.LocalPort();
         var listener = receiver.ToHttpListenerObservable();
         var errors = new ConcurrentQueue<Exception>();
 
@@ -182,7 +166,7 @@ public class SubscriptionLifecycleTests
             // (rather than a faulted stream) still fails this test via the timeout.
             await SendUntilReceivedAsync(sender, port, received.Task);
 
-            var message = await received.Task.WaitAsync(Timeout);
+            var message = await received.Task.WaitAsync(TestNetwork.Timeout);
             Assert.Equal("NOTIFY", message.Method);
 
             subscription.Dispose();
@@ -191,17 +175,12 @@ public class SubscriptionLifecycleTests
         Assert.Empty(errors);
     }
 
-    private static async Task WaitUntilListeningAsync(TcpListener tcpListener)
+    private static async Task WaitUntilAcceptPendingAsync(TcpListener tcpListener)
     {
-        // The accept loop starts the listener asynchronously on subscription.
-        for (var attempt = 0; attempt < 100 && !tcpListener.Server.IsBound; attempt++)
-        {
-            await Task.Delay(20);
-        }
-
+        // The listener is started synchronously on subscription, so it is already bound...
         Assert.True(tcpListener.Server.IsBound);
 
-        // Bound is not yet listening; give the loop a moment to reach its pending accept.
+        // ...but the loop still needs a moment to reach its first pending accept.
         await Task.Delay(100);
     }
 
@@ -213,7 +192,7 @@ public class SubscriptionLifecycleTests
         // until the subscriber sees one rather than assuming the first datagram lands.
         for (var attempt = 0; attempt < 100 && !received.IsCompleted; attempt++)
         {
-            await sender.SendAsync(Datagram, destination).AsTask().WaitAsync(Timeout);
+            await sender.SendAsync(TestNetwork.SsdpNotify(), destination).AsTask().WaitAsync(TestNetwork.Timeout);
             await Task.WhenAny(received, Task.Delay(50));
         }
     }

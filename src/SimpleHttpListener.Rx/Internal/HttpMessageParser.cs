@@ -67,12 +67,7 @@ internal static class HttpMessageParser
                     {
                         if (parserDelegate.State.HasIncompleteMessage)
                         {
-                            if (headerCompletionCorrection && !parserDelegate.State.AreHeadersComplete)
-                            {
-                                TryExecute(parser, "\r\n\r\n"u8);
-                            }
-
-                            TryExecute(parser, ReadOnlySpan<byte>.Empty);
+                            SignalEndOfInput(parser, parserDelegate, headerCompletionCorrection);
 
                             foreach (var message in DrainCompleted(parserDelegate, connection))
                             {
@@ -162,6 +157,24 @@ internal static class HttpMessageParser
         using var datagramParser = new DatagramParser();
         return datagramParser.Parse(
             datagram, headerCompletionCorrection, localEndPoint, remoteEndPoint, captureRawMessage);
+    }
+
+    /// <summary>
+    /// Tells the parser no more bytes are coming, which completes a body delimited by end of
+    /// input. With <see cref="ErrorCorrection.HeaderCompletionError"/> a header block the
+    /// sender never terminated is closed first — some SSDP devices omit the blank line.
+    /// </summary>
+    internal static void SignalEndOfInput(
+        HttpCombinedParser parser,
+        ListenerParserDelegate parserDelegate,
+        bool headerCompletionCorrection)
+    {
+        if (headerCompletionCorrection && !parserDelegate.State.AreHeadersComplete)
+        {
+            TryExecute(parser, "\r\n\r\n"u8);
+        }
+
+        TryExecute(parser, ReadOnlySpan<byte>.Empty);
     }
 
     internal static (int Consumed, bool Faulted) TryExecute(HttpCombinedParser parser, ReadOnlySpan<byte> data)

@@ -38,16 +38,10 @@ internal sealed class DatagramParser : IDisposable
 
         if (!hasError && _parserDelegate.State.HasIncompleteMessage)
         {
+            // A datagram is self-delimiting, so its end is the end of the input.
             neededEofSignal = true;
 
-            if (headerCompletionCorrection && !_parserDelegate.State.AreHeadersComplete)
-            {
-                HttpMessageParser.TryExecute(_parser, "\r\n\r\n"u8);
-            }
-
-            // A datagram is self-delimiting; feed the EOF signal to complete
-            // close-delimited bodies.
-            HttpMessageParser.TryExecute(_parser, ReadOnlySpan<byte>.Empty);
+            HttpMessageParser.SignalEndOfInput(_parser, _parserDelegate, headerCompletionCorrection);
         }
 
         var message = !hasError && _parserDelegate.CompletedMessages.TryDequeue(out var snapshot)
