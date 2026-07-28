@@ -244,11 +244,9 @@ Two mistakes this library makes easy are hard to see in a code review and invisi
 runtime until production: subscribing with an `async` handler, and letting an upgraded
 connection go unowned. From 7.5.0 both are build warnings.
 
-The analyzers arrive with the package — no install step, and they reach you through
-intermediate libraries too, so referencing something built on SimpleHttpListener.Rx is
-enough. They can also be referenced on their own as
-[SimpleHttpListener.Rx.Analyzers](https://www.nuget.org/packages/SimpleHttpListener.Rx.Analyzers)
-if you want the Rx rule without the listener.
+The analyzers ship inside the package — no install step, nothing extra to reference, and
+they reach you through intermediate libraries too, so referencing something built on
+SimpleHttpListener.Rx is enough.
 
 They are build-time only: nothing is added to your output, and there is no runtime
 dependency. Both rules are **warnings**, so a build never breaks because of them unless you
@@ -360,10 +358,9 @@ dotnet_diagnostic.SHLRX001.severity = none
 ```
 
 `.editorconfig` and `NoWarn` are the supported off-switches, and they silence a rule
-completely. Note that `ExcludeAssets="analyzers"` on the package reference does **not** work
-— the analyzers arrive as a dependency whose analyzer assets are deliberately flowed, and
-that setting cannot override it. The assembly still loads when a rule is set to `none`; it
-just has nothing to say.
+completely. `ExcludeAssets="analyzers"` on the package reference does **not** remove them —
+that has been measured, not assumed. The assembly still loads when a rule is set to `none`;
+it just has nothing to say.
 
 ### Parse errors
 

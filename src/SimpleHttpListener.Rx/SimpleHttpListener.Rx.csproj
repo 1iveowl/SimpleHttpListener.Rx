@@ -20,21 +20,29 @@
 
   <ItemGroup>
     <!--
-      Carries the analyzers to consumers as a package dependency. Everything but the
-      analyzers asset is private: the analyzer assembly is a build-time tool, and letting its
-      compile asset flow would make it an ordinary reference in every project downstream.
-      That is wrong on its own, and enough to put Visual Studio's project system into
-      LimitedFunctionality, because it then sees one project resolved two ways — as an
-      analyzer and as an assembly.
+      The analyzers ship inside this package rather than as a dependency on one of their own.
+      A dependency would have to carry the analyzer project into every consuming project's
+      reference graph, where it resolves to no assembly at all — which Visual Studio reports
+      as a broken reference (and, when its compile asset was allowed through, as
+      LimitedFunctionality). Shipping the assemblies directly leaves nothing to resolve.
 
-      ReferenceOutputAssembly must stay at its default: setting it to false suppresses the
-      package dependency altogether, which is the whole point of this reference. The cost is
-      that this project alone compiles against the analyzer assembly without using it. The
-      rules are applied to the samples and the test projects instead, which is where code
-      resembling a consumer's actually lives.
+      PrivateAssets="all" and ReferenceOutputAssembly="false" reduce this to what it is: an
+      instruction to build the analyzers first. Nothing about them reaches this assembly's
+      references or the package's dependencies.
     -->
     <ProjectReference Include="../SimpleHttpListener.Rx.Analyzers/SimpleHttpListener.Rx.Analyzers.csproj"
-                      PrivateAssets="compile;runtime;native;contentfiles;build" />
+                      PrivateAssets="all" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Both assemblies, because the code fixes live apart from the analyzers (rule RS1038) and
+      the compiler loads whatever it finds in this folder.
+    -->
+    <None Include="../SimpleHttpListener.Rx.Analyzers/bin/$(Configuration)/netstandard2.0/SimpleHttpListener.Rx.Analyzers.dll"
+          Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="../SimpleHttpListener.Rx.Analyzers.CodeFixes/bin/$(Configuration)/netstandard2.0/SimpleHttpListener.Rx.Analyzers.CodeFixes.dll"
+          Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>
