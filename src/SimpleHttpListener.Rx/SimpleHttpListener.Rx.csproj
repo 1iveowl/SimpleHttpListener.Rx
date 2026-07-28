@@ -20,12 +20,21 @@
 
   <ItemGroup>
     <!--
-      PrivateAssets="none" so the analyzers reach consumers of this package rather than
-      stopping at its build. A consumer who does not want them can add
-      ExcludeAssets="analyzers" to their reference; see the README.
+      Carries the analyzers to consumers as a package dependency. Everything but the
+      analyzers asset is private: the analyzer assembly is a build-time tool, and letting its
+      compile asset flow would make it an ordinary reference in every project downstream.
+      That is wrong on its own, and enough to put Visual Studio's project system into
+      LimitedFunctionality, because it then sees one project resolved two ways — as an
+      analyzer and as an assembly.
+
+      ReferenceOutputAssembly must stay at its default: setting it to false suppresses the
+      package dependency altogether, which is the whole point of this reference. The cost is
+      that this project alone compiles against the analyzer assembly without using it. The
+      rules are applied to the samples and the test projects instead, which is where code
+      resembling a consumer's actually lives.
     -->
     <ProjectReference Include="../SimpleHttpListener.Rx.Analyzers/SimpleHttpListener.Rx.Analyzers.csproj"
-                      PrivateAssets="none" />
+                      PrivateAssets="compile;runtime;native;contentfiles;build" />
   </ItemGroup>
 
   <ItemGroup>
