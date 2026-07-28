@@ -100,3 +100,30 @@ static async Task EchoWebSocketAsync(HttpRequestResponse request)
         request.Connection?.Dispose();
     }
 }
+
+// --- Analyzer demo - uncomment to see the analyzer in action ---
+//static class AnalyzerDemo
+//{
+//    // SHLRX001: Ctrl+. offers two fixes — Concat (one at a time, in order) and Merge.
+//    public static void AsyncLambda(IObservable<HttpRequestResponse> requests) =>
+//        requests.Subscribe(async request => await request.SendResponseAsync(new HttpResponse()));
+
+//    // SHLRX001 again: the word 'async' appears nowhere at this call site.
+//    public static void AsyncMethodGroup(IObservable<HttpRequestResponse> requests) =>
+//        requests.Subscribe(HandleAsync);
+
+//    static async void HandleAsync(HttpRequestResponse request) =>
+//        await request.SendResponseAsync(new HttpResponse());
+
+//    // SHLRX002: this path abandons the connection.
+//    public static void LeakedUpgrade(HttpRequestResponse request)
+//    {
+//        if (request.IsUpgradeRequest)
+//        {
+//            return;
+//        }
+
+//        _ = request.SendResponseAsync(new HttpResponse());
+//    }
+//}
+
