@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      Separate assembly from the analyzers on purpose (RS1038): an assembly containing a
+      DiagnosticAnalyzer must not reference the Workspaces layer, which is absent when the
+      compiler runs from the command line. Code fixes need it, so they live here and are
+      packed alongside the analyzer by the SimpleHttpListener.Rx.Analyzers project.
+    -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- One definition of the IDs and property keys, compiled into both assemblies. -->
+    <Compile Include="../SimpleHttpListener.Rx.Analyzers/DiagnosticIds.cs" Link="DiagnosticIds.cs" />
+  </ItemGroup>
+
+</Project>

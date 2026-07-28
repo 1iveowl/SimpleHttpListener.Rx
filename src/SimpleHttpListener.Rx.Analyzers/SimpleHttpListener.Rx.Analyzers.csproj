@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Analyzers load into the compiler, which runs on netstandard2.0. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <PackageId>SimpleHttpListener.Rx.Analyzers</PackageId>
+    <Version>7.5.0</Version>
+    <Authors>1iveowl</Authors>
+    <Description>Build-time analyzers for SimpleHttpListener.Rx: catches async subscribers passed to Rx Subscribe (SHLRX001) and leaked connections after an upgrade request (SHLRX002).</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/1iveowl/SimpleHttpListener.Rx</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/1iveowl/SimpleHttpListener.Rx</RepositoryUrl>
+    <PackageTags>rx;reactive;analyzers;roslyn;http;listener</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <!-- Ships as an analyzer, not a library: nothing lands in the consumer's lib folder. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Release tracking (RS2008): every shipped diagnostic ID is public API. -->
+    <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="$(OutputPath)SimpleHttpListener.Rx.Analyzers.CodeFixes.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Packed together, referenced only so the code-fix assembly is built and copied first. -->
+    <ProjectReference Include="../SimpleHttpListener.Rx.Analyzers.CodeFixes/SimpleHttpListener.Rx.Analyzers.CodeFixes.csproj"
+                      ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Target Name="CopyCodeFixesForPack" BeforeTargets="Build">
+    <MSBuild Projects="../SimpleHttpListener.Rx.Analyzers.CodeFixes/SimpleHttpListener.Rx.Analyzers.CodeFixes.csproj"
+             Targets="Build" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="CodeFixesOutput" />
+    </MSBuild>
+    <Copy SourceFiles="@(CodeFixesOutput)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

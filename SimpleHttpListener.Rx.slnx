@@ -1,9 +1,12 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/SimpleHttpListener.Rx/SimpleHttpListener.Rx.csproj" />
+    <Project Path="src/SimpleHttpListener.Rx.Analyzers/SimpleHttpListener.Rx.Analyzers.csproj" />
+    <Project Path="src/SimpleHttpListener.Rx.Analyzers.CodeFixes/SimpleHttpListener.Rx.Analyzers.CodeFixes.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SimpleHttpListener.Rx.Tests/SimpleHttpListener.Rx.Tests.csproj" />
+    <Project Path="tests/SimpleHttpListener.Rx.Analyzers.Tests/SimpleHttpListener.Rx.Analyzers.Tests.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/SimpleHttpListener.Rx.Sample/SimpleHttpListener.Rx.Sample.csproj" />
