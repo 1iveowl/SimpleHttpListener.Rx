@@ -10,6 +10,8 @@ namespace SimpleHttpListener.Rx;
 /// </summary>
 public static class HttpSender
 {
+    private const int SwitchingProtocols = 101;
+
     /// <summary>
     /// Sends <paramref name="response"/> on the connection <paramref name="request"/> arrived on.
     /// </summary>
@@ -17,7 +19,10 @@ public static class HttpSender
     /// <param name="response">The response to send.</param>
     /// <param name="closeConnection">
     /// Whether to close the connection after sending. <see langword="null"/> (auto) closes
-    /// if and only if <see cref="HttpRequestResponse.ShouldKeepAlive"/> is <see langword="false"/>.
+    /// when the listener has handed the connection over and this response ends the
+    /// exchange: either <see cref="HttpRequestResponse.ShouldKeepAlive"/> is
+    /// <see langword="false"/>, or the request was an upgrade request
+    /// (<see cref="HttpRequestResponse.IsUpgradeRequest"/>) that this response declines.
     /// </param>
     /// <param name="cancellationToken">Cancels the send.</param>
     /// <exception cref="InvalidOperationException">The request has no connection (UDP).</exception>
@@ -33,8 +38,28 @@ public static class HttpSender
                 "The request has no connection to respond on. Responses can only be sent to messages received over TCP.");
         }
 
-        return connection.SendResponseAsync(response, closeConnection ?? !request.ShouldKeepAlive, cancellationToken);
+        return connection.SendResponseAsync(
+            response,
+            closeConnection ?? ClosesInAutoMode(request, response),
+            cancellationToken);
     }
+
+    /// <summary>
+    /// Whether auto mode closes the connection after <paramref name="response"/>.
+    /// </summary>
+    /// <remarks>
+    /// The listener stops reading a connection once it emits a message that hands ownership
+    /// over — <c>ShouldKeepAlive == false</c> or an upgrade request. Keep-alive is the
+    /// straightforward case. An upgrade request keeps <c>ShouldKeepAlive == true</c> (the
+    /// client asked to continue, just in another protocol), so answering one with anything
+    /// other than <c>101 Switching Protocols</c> declines the upgrade and ends the exchange:
+    /// nothing will read that connection again, so auto mode closes it rather than leaking
+    /// the socket. A <c>101</c> is the handshake succeeding and leaves the connection open
+    /// for the new protocol.
+    /// </remarks>
+    private static bool ClosesInAutoMode(HttpRequestResponse request, HttpResponse response) =>
+        !request.ShouldKeepAlive
+        || (request.IsUpgradeRequest && response.StatusCode != SwitchingProtocols);
 
     /// <summary>
     /// Sends <paramref name="response"/> on <paramref name="connection"/>.

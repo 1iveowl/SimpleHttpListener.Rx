@@ -8,7 +8,10 @@ namespace SimpleHttpListener.Rx.Tests;
 
 public class HttpSenderTests
 {
-    private static HttpRequestResponse Request(FakeConnection connection, bool shouldKeepAlive) => new()
+    private static HttpRequestResponse Request(
+        FakeConnection connection,
+        bool shouldKeepAlive,
+        bool isUpgradeRequest = false) => new()
     {
         MessageType = MessageType.Request,
         Transport = HttpTransport.Tcp,
@@ -18,6 +21,7 @@ public class HttpSenderTests
         ShouldKeepAlive = shouldKeepAlive,
         Headers = FrozenDictionary<string, string>.Empty,
         IsEndOfMessage = true,
+        IsUpgradeRequest = isUpgradeRequest,
         Connection = connection
     };
 
@@ -108,6 +112,44 @@ public class HttpSenderTests
         await Request(forcedOpen, shouldKeepAlive: false)
             .SendResponseAsync(new HttpResponse(), closeConnection: false);
         Assert.False(forcedOpen.IsDisposed);
+    }
+
+    [Fact]
+    public async Task Auto_mode_closes_connection_when_an_upgrade_request_is_declined()
+    {
+        // An upgrade request keeps ShouldKeepAlive == true, but the listener has stopped
+        // reading it — anything other than a 101 ends the exchange, so auto mode must close
+        // rather than leave a socket nothing will ever read or dispose.
+        var declined = new FakeConnection();
+        await Request(declined, shouldKeepAlive: true, isUpgradeRequest: true)
+            .SendResponseAsync(new HttpResponse { StatusCode = 400 });
+
+        Assert.True(declined.IsDisposed);
+        Assert.Contains("Connection: close\r\n", Encoding.ASCII.GetString(declined.WrittenBytes));
+    }
+
+    [Fact]
+    public async Task Auto_mode_keeps_connection_open_when_an_upgrade_handshake_succeeds()
+    {
+        var accepted = new FakeConnection();
+        await Request(accepted, shouldKeepAlive: true, isUpgradeRequest: true)
+            .SendResponseAsync(new HttpResponse
+            {
+                StatusCode = 101,
+                Headers = { ["Upgrade"] = "websocket", ["Connection"] = "Upgrade" }
+            });
+
+        Assert.False(accepted.IsDisposed);
+    }
+
+    [Fact]
+    public async Task Explicit_close_flag_still_overrides_upgrade_semantics()
+    {
+        var heldOpen = new FakeConnection();
+        await Request(heldOpen, shouldKeepAlive: true, isUpgradeRequest: true)
+            .SendResponseAsync(new HttpResponse { StatusCode = 400 }, closeConnection: false);
+
+        Assert.False(heldOpen.IsDisposed);
     }
 
     [Fact]

@@ -21,6 +21,7 @@ The library is built with [Reactive Extensions](https://reactivex.io/), exposing
 
 | Version | Highlights |
 | --- | --- |
+| **7.5.0** | [Declining an upgrade no longer leaks the connection](#websockets-710), and [analyzers](#analyzers-750) ship with the package to catch two easy-to-miss misuses at build time. |
 | **7.4.0** | [Listener options](#listener-options-740): opt-in [raw wire capture](#raw-message-capture-740) of each UDP message's bytes as received, and opt-in RFC 9112 §6.3 framing for unframed response bodies. |
 | **7.3.0** | [Reliable stop and restart](#subscription-lifecycle-730): stopping never surfaces as an error, and dispose-then-resubscribe never races the previous teardown. |
 | **7.2.0** | `LocalEndPoint` on UDP messages reports [the interface the datagram arrived on](#local-endpoint-of-a-received-datagram-720) rather than the socket's bound address. |
@@ -220,6 +221,13 @@ Notes and limitations:
 
 - After an upgrade request is emitted the listener no longer reads that connection — complete
   the handshake or dispose `Connection`, even if you reject the upgrade.
+- **Rejecting by responding closes the connection (7.5.0+).** `SendResponseAsync` in auto
+  mode (`closeConnection: null`, the default) treats any response other than
+  `101 Switching Protocols` to an upgrade request as declining it, and closes afterwards.
+  Before 7.5.0 it kept the connection open — an upgrade request has `ShouldKeepAlive == true`
+  — and since the listener had already stopped reading it, that socket leaked. Answering a
+  `400` and considering the matter closed is now correct. Pass `closeConnection: false`
+  explicitly if you intend to keep the connection and take over the stream yourself.
 - `ws://` only: the listener runs on a raw `TcpListener` with no TLS, so browsers can only
   connect from non-HTTPS pages. This targets LAN/local/native-app scenarios.
 - `AcceptWebSocketAsync` validates the handshake (version 13, key present) and throws
