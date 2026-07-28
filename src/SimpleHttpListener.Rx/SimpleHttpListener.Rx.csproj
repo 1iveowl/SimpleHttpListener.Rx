@@ -25,6 +25,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      PrivateAssets="none" so the analyzers reach consumers of this package rather than
+      stopping at its build. A consumer who does not want them can add
+      ExcludeAssets="analyzers" to their reference; see the README.
+    -->
+    <ProjectReference Include="../SimpleHttpListener.Rx.Analyzers/SimpleHttpListener.Rx.Analyzers.csproj"
+                      PrivateAssets="none" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="SimpleHttpListener.Rx.Tests" />
   </ItemGroup>
 

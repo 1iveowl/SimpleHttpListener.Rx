@@ -12,8 +12,8 @@
     <RepositoryUrl>https://github.com/1iveowl/SimpleHttpListener.Rx</RepositoryUrl>
     <PackageTags>rx;reactive;analyzers;roslyn;http;listener</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!-- No lib output to symbolise, and an empty snupkg fails packing with NU5017. -->
+    <IncludeSymbols>false</IncludeSymbols>
 
     <!-- Ships as an analyzer, not a library: nothing lands in the consumer's lib folder. -->
     <IncludeBuildOutput>false</IncludeBuildOutput>
