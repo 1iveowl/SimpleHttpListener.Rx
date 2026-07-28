@@ -155,8 +155,64 @@ public class AsyncSubscriberCodeFixTests
             ConcatFix);
 
     [Fact]
+    public Task A_conflicting_Observable_type_in_scope_does_not_break_the_fix() => VerifyFixAsync(
+        """
+        class Observable
+        {
+        }
+
+        class C
+        {
+            void M(IObservable<int> xs) =>
+                xs.Subscribe({|SHLRX001:async x => await Task.Delay(x)|});
+        }
+        """,
+        """
+        class Observable
+        {
+        }
+
+        class C
+        {
+            void M(IObservable<int> xs) =>
+                xs.Select(x => System.Reactive.Linq.Observable.FromAsync(async () => await Task.Delay(x))).Concat().Subscribe();
+        }
+        """,
+        ConcatFix);
+
+    [Fact]
+    public Task An_async_anonymous_method_offers_no_fix() =>
+        RxVerifier.VerifyNoFixAsync<AsyncSubscriberAnalyzer, AsyncSubscriberCodeFixProvider>(
+            Preamble + """
+            class C
+            {
+                void M(IObservable<int> xs) =>
+                    xs.Subscribe({|SHLRX001:async delegate (int x) { await Task.Delay(x); }|});
+            }
+            """);
+
+    [Fact]
+    public Task A_custom_subscribe_extension_offers_no_fix() =>
+        RxVerifier.VerifyNoFixAsync<AsyncSubscriberAnalyzer, AsyncSubscriberCodeFixProvider>(
+            Preamble + """
+            static class Ext
+            {
+                // Typed to the element, so the rewritten IObservable<Unit> would not bind here.
+                public static IDisposable Subscribe(this IObservable<string> source, Action<string> onNext, string label) =>
+                    ObservableExtensions.Subscribe(source, onNext);
+            }
+
+            class C
+            {
+                void M(IObservable<string> xs) =>
+                    xs.Subscribe({|SHLRX001:async s => await Task.Delay(s.Length)|}, "label");
+            }
+            """);
+
+    [Fact]
     public Task Method_group_form_offers_no_fix() =>
-        RxVerifier.VerifyCodeFixAsync<AsyncSubscriberAnalyzer, AsyncSubscriberCodeFixProvider>(
+        // Rewriting this would mean changing HandleAsync's own signature.
+        RxVerifier.VerifyNoFixAsync<AsyncSubscriberAnalyzer, AsyncSubscriberCodeFixProvider>(
             Preamble + """
             class C
             {
@@ -164,21 +220,14 @@ public class AsyncSubscriberCodeFixTests
 
                 async void HandleAsync(int x) => await Task.Delay(x);
             }
-            """,
-            // Unchanged: rewriting this would mean changing HandleAsync's signature.
-            Preamble + """
-            class C
-            {
-                void M(IObservable<int> xs) => xs.Subscribe({|SHLRX001:HandleAsync|});
-
-                async void HandleAsync(int x) => await Task.Delay(x);
-            }
-            """,
-            codeActionIndex: null);
+            """);
 
     [Fact]
     public Task A_method_group_inside_an_enclosing_lambda_does_not_rewrite_the_outer_call() =>
-        RxVerifier.VerifyCodeFixAsync<AsyncSubscriberAnalyzer, AsyncSubscriberCodeFixProvider>(
+        // The enclosing 'i => ...' lambda belongs to a different Subscribe call. Two things
+        // keep the fix off it — the diagnostic is not marked fixable, and the rewrite is
+        // anchored to the reported span — and this goes red if both are lost.
+        RxVerifier.VerifyNoFixAsync<AsyncSubscriberAnalyzer, AsyncSubscriberCodeFixProvider>(
             Preamble + """
             class C
             {
@@ -187,24 +236,12 @@ public class AsyncSubscriberCodeFixTests
 
                 async void HandleAsync(int x) => await Task.Delay(x);
             }
-            """,
-            // The enclosing 'i => ...' lambda belongs to a different Subscribe call. Two
-            // things keep the fix off it — the diagnostic carries no lambda property, and the
-            // rewrite is anchored to the reported span — and this goes red if both are lost.
-            Preamble + """
-            class C
-            {
-                void M(IObservable<int> xs, IObservable<int> other) =>
-                    other.Subscribe(i => xs.Subscribe({|SHLRX001:HandleAsync|}));
-
-                async void HandleAsync(int x) => await Task.Delay(x);
-            }
-            """,
-            codeActionIndex: null);
+            """);
 
     [Fact]
     public Task An_async_handler_in_the_onError_position_offers_no_fix() =>
-        RxVerifier.VerifyCodeFixAsync<AsyncSubscriberAnalyzer, AsyncSubscriberCodeFixProvider>(
+        // FromAsync projects the onNext path; there is no equivalent for an error handler.
+        RxVerifier.VerifyNoFixAsync<AsyncSubscriberAnalyzer, AsyncSubscriberCodeFixProvider>(
             Preamble + """
             class C
             {
@@ -213,16 +250,5 @@ public class AsyncSubscriberCodeFixTests
                         x => { },
                         {|SHLRX001:async (Exception e) => await Task.Delay(1)|});
             }
-            """,
-            // FromAsync projects the onNext path; there is no equivalent for an error handler.
-            Preamble + """
-            class C
-            {
-                void M(IObservable<int> xs) =>
-                    xs.Subscribe(
-                        x => { },
-                        {|SHLRX001:async (Exception e) => await Task.Delay(1)|});
-            }
-            """,
-            codeActionIndex: null);
+            """);
 }

@@ -15,6 +15,11 @@ public sealed class AsyncSubscriberAnalyzer : DiagnosticAnalyzer
     private const string ObservableExtensionsMetadataName = "System.ObservableExtensions";
     private const string ObservableMetadataName = "System.IObservable`1";
     private const string SubscribeMethodName = "Subscribe";
+    private const string AsyncStateMachineAttributeName = "AsyncStateMachineAttribute";
+
+    /// <summary>Marks a diagnostic the code fix can act on; see <see cref="DiagnosticIds.FixableProperty"/>.</summary>
+    private static readonly ImmutableDictionary<string, string?> FixableProperties =
+        ImmutableDictionary<string, string?>.Empty.Add(DiagnosticIds.FixableProperty, bool.TrueString);
 
     private static readonly DiagnosticDescriptor Rule = new(
         DiagnosticIds.AsyncSubscriber,
@@ -32,7 +37,7 @@ public sealed class AsyncSubscriberAnalyzer : DiagnosticAnalyzer
             + "never slowed to the rate the handler can keep up with. Project the work into the pipeline "
             + "with Observable.FromAsync and flatten it with Concat (preserves order) or Merge (allows "
             + "concurrency) instead.",
-        helpLinkUri: DiagnosticIds.HelpLinkBase + "shlrx001");
+        helpLinkUri: DiagnosticIds.HelpLink(DiagnosticIds.AsyncSubscriber));
 
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = ImmutableArray.Create(Rule);
@@ -56,22 +61,27 @@ public sealed class AsyncSubscriberAnalyzer : DiagnosticAnalyzer
                 return;
             }
 
-            var context = new SubscribeContext(observableExtensions, observable);
+            var symbols = new SubscribeSymbols(observableExtensions, observable);
 
             compilationStart.RegisterOperationAction(
-                operationContext => Analyze(operationContext, context),
+                operationContext => Analyze(operationContext, symbols),
                 OperationKind.Invocation);
         });
     }
 
-    private static void Analyze(OperationAnalysisContext context, SubscribeContext subscribeContext)
+    private static void Analyze(OperationAnalysisContext context, SubscribeSymbols symbols)
     {
         var invocation = (IInvocationOperation)context.Operation;
 
-        if (!subscribeContext.IsRxSubscribe(invocation.TargetMethod))
+        if (!symbols.IsRxSubscribe(invocation.TargetMethod))
         {
             return;
         }
+
+        // The rewrite changes the stream's element type, so the remaining arguments have to
+        // belong to an overload set known to accept the new one. Only Rx's own Subscribe
+        // qualifies; a third-party Subscribe over IObservable<T> still warns, without a fix.
+        var fixable = symbols.IsObservableExtensions(invocation.TargetMethod);
 
         foreach (var argument in invocation.Arguments)
         {
@@ -88,7 +98,7 @@ public sealed class AsyncSubscriberAnalyzer : DiagnosticAnalyzer
                     context.ReportDiagnostic(Diagnostic.Create(
                         Rule,
                         lambda.Syntax.GetLocation(),
-                        ImmutableDictionary<string, string?>.Empty.Add(DiagnosticIds.LambdaProperty, bool.TrueString)));
+                        fixable ? FixableProperties : null));
                     break;
 
                 // The sneakier form: 'async' appears only at the method's declaration, which
@@ -114,9 +124,6 @@ public sealed class AsyncSubscriberAnalyzer : DiagnosticAnalyzer
                 case IDelegateCreationOperation delegateCreation:
                     operation = delegateCreation.Target;
                     break;
-                case IParenthesizedOperation parenthesized:
-                    operation = parenthesized.Operand;
-                    break;
                 default:
                     return operation;
             }
@@ -124,8 +131,11 @@ public sealed class AsyncSubscriberAnalyzer : DiagnosticAnalyzer
     }
 
     private static bool IsActionDelegate(ITypeSymbol type) =>
-        type is INamedTypeSymbol { ContainingNamespace: { Name: nameof(System), ContainingNamespace.IsGlobalNamespace: true } }
-            and ({ Name: nameof(Action), IsGenericType: false } or { Name: nameof(Action), IsGenericType: true });
+        type is INamedTypeSymbol
+        {
+            Name: nameof(Action),
+            ContainingNamespace: { Name: nameof(System), ContainingNamespace.IsGlobalNamespace: true }
+        };
 
     /// <summary>
     /// Whether <paramref name="method"/> is an async method. <see cref="IMethodSymbol.IsAsync"/>
@@ -142,7 +152,7 @@ public sealed class AsyncSubscriberAnalyzer : DiagnosticAnalyzer
 
         foreach (var attribute in method.GetAttributes())
         {
-            if (attribute.AttributeClass?.Name == "AsyncStateMachineAttribute")
+            if (attribute.AttributeClass?.Name == AsyncStateMachineAttributeName)
             {
                 return true;
             }
@@ -152,8 +162,11 @@ public sealed class AsyncSubscriberAnalyzer : DiagnosticAnalyzer
     }
 
     /// <summary>Per-compilation symbols, looked up once instead of per invocation.</summary>
-    private sealed class SubscribeContext(INamedTypeSymbol observableExtensions, INamedTypeSymbol observable)
+    private sealed class SubscribeSymbols(INamedTypeSymbol observableExtensions, INamedTypeSymbol observable)
     {
+        internal bool IsObservableExtensions(IMethodSymbol method) =>
+            SymbolEqualityComparer.Default.Equals(method.ContainingType, observableExtensions);
+
         internal bool IsRxSubscribe(IMethodSymbol method)
         {
             if (method.Name != SubscribeMethodName)
@@ -161,7 +174,7 @@ public sealed class AsyncSubscriberAnalyzer : DiagnosticAnalyzer
                 return false;
             }
 
-            if (SymbolEqualityComparer.Default.Equals(method.ContainingType, observableExtensions))
+            if (IsObservableExtensions(method))
             {
                 return true;
             }

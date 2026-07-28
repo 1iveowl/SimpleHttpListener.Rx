@@ -10,7 +10,8 @@ namespace SimpleHttpListener.Rx;
 /// </summary>
 public static class HttpSender
 {
-    private const int SwitchingProtocols = 101;
+    /// <summary>Lowest status code that ends a message exchange; below it is 1xx informational.</summary>
+    private const int FinalResponse = 200;
 
     /// <summary>
     /// Sends <paramref name="response"/> on the connection <paramref name="request"/> arrived on.
@@ -22,7 +23,8 @@ public static class HttpSender
     /// when the listener has handed the connection over and this response ends the
     /// exchange: either <see cref="HttpRequestResponse.ShouldKeepAlive"/> is
     /// <see langword="false"/>, or the request was an upgrade request
-    /// (<see cref="HttpRequestResponse.IsUpgradeRequest"/>) that this response declines.
+    /// (<see cref="HttpRequestResponse.IsUpgradeRequest"/>) that this response declines by
+    /// answering with a final status rather than <c>101 Switching Protocols</c>.
     /// </param>
     /// <param name="cancellationToken">Cancels the send.</param>
     /// <exception cref="InvalidOperationException">The request has no connection (UDP).</exception>
@@ -43,23 +45,6 @@ public static class HttpSender
             closeConnection ?? ClosesInAutoMode(request, response),
             cancellationToken);
     }
-
-    /// <summary>
-    /// Whether auto mode closes the connection after <paramref name="response"/>.
-    /// </summary>
-    /// <remarks>
-    /// The listener stops reading a connection once it emits a message that hands ownership
-    /// over — <c>ShouldKeepAlive == false</c> or an upgrade request. Keep-alive is the
-    /// straightforward case. An upgrade request keeps <c>ShouldKeepAlive == true</c> (the
-    /// client asked to continue, just in another protocol), so answering one with anything
-    /// other than <c>101 Switching Protocols</c> declines the upgrade and ends the exchange:
-    /// nothing will read that connection again, so auto mode closes it rather than leaking
-    /// the socket. A <c>101</c> is the handshake succeeding and leaves the connection open
-    /// for the new protocol.
-    /// </remarks>
-    private static bool ClosesInAutoMode(HttpRequestResponse request, HttpResponse response) =>
-        !request.ShouldKeepAlive
-        || (request.IsUpgradeRequest && response.StatusCode != SwitchingProtocols);
 
     /// <summary>
     /// Sends <paramref name="response"/> on <paramref name="connection"/>.
@@ -159,6 +144,29 @@ public static class HttpSender
 
         return (buffer, written);
     }
+
+    /// <summary>
+    /// Whether auto mode closes the connection after <paramref name="response"/>.
+    /// </summary>
+    /// <remarks>
+    /// The listener stops reading a connection once it emits a message that hands ownership
+    /// over, which happens for <c>ShouldKeepAlive == false</c> and for an upgrade request.
+    /// <para>
+    /// For an ordinary message that is simply whether the client asked to keep the
+    /// connection. For an upgrade request the response decides, because keep-alive says
+    /// nothing useful here — an HTTP/1.0 upgrade request parses as
+    /// <c>ShouldKeepAlive == false</c> yet its handshake may well succeed. So: a final
+    /// response (2xx and above) declines the upgrade and ends the exchange, and since
+    /// nothing will read that connection again auto mode closes it rather than leaking the
+    /// socket. <c>101 Switching Protocols</c> is the handshake succeeding, and the other
+    /// <c>1xx</c> responses are informational with the real response still to come; both
+    /// leave the connection open.
+    /// </para>
+    /// </remarks>
+    private static bool ClosesInAutoMode(HttpRequestResponse request, HttpResponse response) =>
+        request.IsUpgradeRequest
+            ? response.StatusCode >= FinalResponse
+            : !request.ShouldKeepAlive;
 
     private static int WriteUtf8(
         Span<byte> destination,

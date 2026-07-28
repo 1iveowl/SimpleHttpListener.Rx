@@ -143,6 +143,31 @@ public class HttpSenderTests
     }
 
     [Fact]
+    public async Task Auto_mode_keeps_a_successful_handshake_open_even_without_keep_alive()
+    {
+        // An HTTP/1.0 upgrade request parses as ShouldKeepAlive == false, so a rule that
+        // checked keep-alive first would tear down a handshake it had just completed.
+        var accepted = new FakeConnection();
+        await Request(accepted, shouldKeepAlive: false, isUpgradeRequest: true)
+            .SendResponseAsync(new HttpResponse { StatusCode = 101 });
+
+        Assert.False(accepted.IsDisposed);
+    }
+
+    [Theory]
+    [InlineData(100)]
+    [InlineData(103)]
+    public async Task Auto_mode_keeps_the_connection_open_for_interim_responses(int statusCode)
+    {
+        // 1xx is informational: the final response is still to come on this connection.
+        var connection = new FakeConnection();
+        await Request(connection, shouldKeepAlive: true, isUpgradeRequest: true)
+            .SendResponseAsync(new HttpResponse { StatusCode = statusCode });
+
+        Assert.False(connection.IsDisposed);
+    }
+
+    [Fact]
     public async Task Explicit_close_flag_still_overrides_upgrade_semantics()
     {
         var heldOpen = new FakeConnection();

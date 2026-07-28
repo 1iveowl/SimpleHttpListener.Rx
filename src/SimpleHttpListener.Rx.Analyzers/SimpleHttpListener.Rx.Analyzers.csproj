@@ -4,14 +4,8 @@
     <!-- Analyzers load into the compiler, which runs on netstandard2.0. -->
     <TargetFramework>netstandard2.0</TargetFramework>
     <PackageId>SimpleHttpListener.Rx.Analyzers</PackageId>
-    <Version>7.5.0</Version>
-    <Authors>1iveowl</Authors>
     <Description>Build-time analyzers for SimpleHttpListener.Rx: catches async subscribers passed to Rx Subscribe (SHLRX001) and leaked connections after an upgrade request (SHLRX002).</Description>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/1iveowl/SimpleHttpListener.Rx</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/1iveowl/SimpleHttpListener.Rx</RepositoryUrl>
     <PackageTags>rx;reactive;analyzers;roslyn;http;listener</PackageTags>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <!-- No lib output to symbolise, and an empty snupkg fails packing with NU5017. -->
     <IncludeSymbols>false</IncludeSymbols>
 
@@ -24,7 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(RoslynVersion)" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />
   </ItemGroup>
 
@@ -35,23 +29,25 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- So the tests can assert the names the rules match on against the real API. -->
+    <InternalsVisibleTo Include="SimpleHttpListener.Rx.Analyzers.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="/" />
     <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <None Include="$(OutputPath)SimpleHttpListener.Rx.Analyzers.CodeFixes.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Packed together, referenced only so the code-fix assembly is built and copied first. -->
+    <!--
+      The code fixes ship in this package but as their own assembly (RS1038 keeps the
+      Workspaces layer out of an analyzer assembly). An ordinary reference builds them and
+      drops the dll next to this one, which is where the None item above packs it from;
+      PrivateAssets keeps it from becoming a dependency of anything.
+    -->
     <ProjectReference Include="../SimpleHttpListener.Rx.Analyzers.CodeFixes/SimpleHttpListener.Rx.Analyzers.CodeFixes.csproj"
-                      ReferenceOutputAssembly="false" PrivateAssets="all" />
+                      PrivateAssets="all" />
   </ItemGroup>
-
-  <Target Name="CopyCodeFixesForPack" BeforeTargets="Build">
-    <MSBuild Projects="../SimpleHttpListener.Rx.Analyzers.CodeFixes/SimpleHttpListener.Rx.Analyzers.CodeFixes.csproj"
-             Targets="Build" Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="CodeFixesOutput" />
-    </MSBuild>
-    <Copy SourceFiles="@(CodeFixesOutput)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
-  </Target>
 
 </Project>

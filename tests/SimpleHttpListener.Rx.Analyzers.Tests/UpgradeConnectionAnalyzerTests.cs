@@ -291,6 +291,111 @@ public class UpgradeConnectionAnalyzerTests
         """);
 
     [Fact]
+    public Task Disposal_in_an_enclosing_finally_is_not_flagged() => VerifyAsync(
+        """
+        class C
+        {
+            async Task Handle(HttpRequestResponse request)
+            {
+                try
+                {
+                    if (request.IsUpgradeRequest)
+                    {
+                        return;
+                    }
+
+                    await request.SendResponseAsync(new HttpResponse());
+                }
+                finally
+                {
+                    request.Connection?.Dispose();
+                }
+            }
+        }
+        """);
+
+    [Fact]
+    public Task Disposal_by_an_enclosing_using_statement_is_not_flagged() => VerifyAsync(
+        """
+        class C
+        {
+            void Handle(HttpRequestResponse request)
+            {
+                using (request.Connection)
+                {
+                    if (request.IsUpgradeRequest)
+                    {
+                        return;
+                    }
+
+                    _ = request.SendResponseAsync(new HttpResponse());
+                }
+            }
+        }
+        """);
+
+    [Fact]
+    public Task Returning_from_a_loop_with_disposal_after_it_is_not_flagged() => VerifyAsync(
+        """
+        class C
+        {
+            void Handle(HttpRequestResponse request, int[] items)
+            {
+                foreach (var item in items)
+                {
+                    if (request.IsUpgradeRequest)
+                    {
+                        return;
+                    }
+                }
+
+                request.Connection?.Dispose();
+            }
+        }
+        """);
+
+    [Fact]
+    public Task A_connection_aliased_before_the_test_is_not_flagged() => VerifyAsync(
+        """
+        class C
+        {
+            void Handle(HttpRequestResponse request)
+            {
+                // Taking ownership up front disposes on every path out, including this one.
+                using var connection = request.Connection;
+
+                if (request.IsUpgradeRequest)
+                {
+                    return;
+                }
+
+                _ = request.SendResponseAsync(new HttpResponse());
+            }
+        }
+        """);
+
+    [Fact]
+    public Task Handling_via_a_local_function_declared_after_the_branch_is_not_flagged() => VerifyAsync(
+        """
+        class C
+        {
+            async Task Handle(HttpRequestResponse request)
+            {
+                if (request.IsUpgradeRequest)
+                {
+                    await AcceptAsync();
+                    return;
+                }
+
+                await request.SendResponseAsync(new HttpResponse());
+
+                // Local functions are in scope regardless of where they are written.
+                async Task AcceptAsync() => await request.AcceptWebSocketAsync();
+            }
+        }
+        """);
+
+    [Fact]
     public Task A_test_on_something_other_than_the_listener_type_is_not_flagged() => VerifyAsync(
         """
         class Other

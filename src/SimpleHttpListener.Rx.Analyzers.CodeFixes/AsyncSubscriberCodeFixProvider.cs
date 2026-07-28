@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
+using Microsoft.CodeAnalysis.Simplification;
 using Microsoft.CodeAnalysis.Text;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -48,9 +49,8 @@ public sealed class AsyncSubscriberCodeFixProvider : CodeFixProvider
 
         foreach (var diagnostic in context.Diagnostics)
         {
-            // Only the anonymous-function form can be rewritten locally; fixing a method
-            // group would mean changing the signature of a method declared elsewhere.
-            if (!diagnostic.Properties.ContainsKey(DiagnosticIds.LambdaProperty))
+            // The analyzer decides what is safely rewritable; see DiagnosticIds.FixableProperty.
+            if (!diagnostic.Properties.ContainsKey(DiagnosticIds.FixableProperty))
             {
                 continue;
             }
@@ -86,9 +86,9 @@ public sealed class AsyncSubscriberCodeFixProvider : CodeFixProvider
     {
         // Anchored to the reported span rather than walked up to from it. Walking would, for
         // a diagnostic that is not itself a lambda, find whatever lambda happens to enclose
-        // it and rewrite that call instead — mangling unrelated code. The caller's
-        // LambdaProperty check already rules that case out; this makes the rewrite correct on
-        // its own terms rather than by relying on the analyzer to have filtered first.
+        // it and rewrite that call instead — mangling unrelated code. The caller's fixable
+        // check already rules that case out; this makes the rewrite correct on its own terms
+        // rather than by relying on the analyzer to have filtered first.
         var lambda = root.FindNode(diagnosticSpan, getInnermostNodeForTie: true)
             as AnonymousFunctionExpressionSyntax;
 
@@ -103,8 +103,8 @@ public sealed class AsyncSubscriberCodeFixProvider : CodeFixProvider
             return null;
         }
 
-        // An anonymous method has no parameter to carry over to Select; the diagnostic still
-        // reports it, it just has no automatic fix.
+        // Only lambdas carry a parameter across to Select in a form this rewrite can reuse.
+        // An 'async delegate (int x)' anonymous method still gets the warning, without a fix.
         var parameterName = lambda switch
         {
             SimpleLambdaExpressionSyntax simple => simple.Parameter.Identifier,
@@ -133,8 +133,13 @@ public sealed class AsyncSubscriberCodeFixProvider : CodeFixProvider
             body as ExpressionSyntax)
             .WithAsyncKeyword(Token(SyntaxKind.AsyncKeyword));
 
+        // Fully qualified, then annotated for the simplifier: it shortens to 'Observable'
+        // wherever that binds to Rx, and stays qualified where another type owns the name.
+        var observable = ParseExpression("global::" + RxLinqNamespace + ".Observable")
+            .WithAdditionalAnnotations(Simplifier.Annotation);
+
         var fromAsync = InvocationExpression(
-            MemberAccess(IdentifierName("Observable"), "FromAsync"),
+            MemberAccess(observable, "FromAsync"),
             ArgumentList(SingletonSeparatedList(Argument(asyncWork))));
 
         var projection = SimpleLambdaExpression(Parameter(rewrite.ParameterName), fromAsync);

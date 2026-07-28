@@ -23,11 +23,14 @@ internal static class DiagnosticIds
     internal const string LeakedUpgradeConnection = "SHLRX002";
 
     /// <summary>
-    /// Set on <see cref="AsyncSubscriber"/> diagnostics whose delegate is an anonymous
-    /// function, which the code fix can rewrite. Absent for method-group arguments, where a
-    /// fix would have to change the referenced method's signature.
+    /// Set on <see cref="AsyncSubscriber"/> diagnostics the code fix can rewrite safely.
+    /// Absent for a method group, where the repair means changing the signature of a method
+    /// declared elsewhere, and for a <c>Subscribe</c> other than Rx's own, whose remaining
+    /// parameters need not accept the element type the rewrite produces.
     /// </summary>
-    internal const string LambdaProperty = "IsLambda";
+    internal const string FixableProperty = "Fixable";
 
-    internal const string HelpLinkBase = "https://github.com/1iveowl/SimpleHttpListener.Rx#";
+    /// <summary>The README section each rule documents itself in.</summary>
+    internal static string HelpLink(string diagnosticId) =>
+        "https://github.com/1iveowl/SimpleHttpListener.Rx#" + diagnosticId.ToLowerInvariant();
 }

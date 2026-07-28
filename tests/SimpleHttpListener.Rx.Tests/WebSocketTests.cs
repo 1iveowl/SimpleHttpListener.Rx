@@ -61,7 +61,19 @@ public class WebSocketTests
         };
     }
 
-    private static async void EchoWebSocket(HttpRequestResponse request)
+    /// <summary>
+    /// Serves the echo endpoint, following the library's own guidance (SHLRX001): the async
+    /// work is projected into the pipeline rather than handed to <c>Subscribe</c> as an async
+    /// delegate. Merged, not concatenated — an echo loop runs until its client disconnects,
+    /// so serialising would stop the listener answering anyone else.
+    /// </summary>
+    private static IDisposable SubscribeEcho(TcpListener tcpListener) =>
+        tcpListener
+            .ToHttpListenerObservable()
+            .SelectMany(request => Observable.FromAsync(() => EchoWebSocketAsync(request)))
+            .Subscribe(_ => { }, _ => { });
+
+    private static async Task EchoWebSocketAsync(HttpRequestResponse request)
     {
         if (!request.IsUpgradeRequest)
         {
@@ -186,7 +198,7 @@ public class WebSocketTests
         var port = TestNetwork.GetFreePort();
         var tcpListener = new TcpListener(IPAddress.Loopback, port);
 
-        using var subscription = tcpListener.ToHttpListenerObservable().Subscribe(EchoWebSocket);
+        using var subscription = SubscribeEcho(tcpListener);
 
         using var client = new ClientWebSocket();
         await client.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/ws"), CancellationToken.None).WaitAsync(TestNetwork.Timeout);
@@ -212,7 +224,7 @@ public class WebSocketTests
         var port = TestNetwork.GetFreePort();
         var tcpListener = new TcpListener(IPAddress.Loopback, port);
 
-        using var subscription = tcpListener.ToHttpListenerObservable().Subscribe(EchoWebSocket);
+        using var subscription = SubscribeEcho(tcpListener);
 
         var echoed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 

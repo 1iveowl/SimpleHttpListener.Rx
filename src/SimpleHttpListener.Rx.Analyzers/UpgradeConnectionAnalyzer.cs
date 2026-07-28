@@ -19,10 +19,6 @@ namespace SimpleHttpListener.Rx.Analyzers;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class UpgradeConnectionAnalyzer : DiagnosticAnalyzer
 {
-    private const string RequestMetadataName = "SimpleHttpListener.Rx.Model.HttpRequestResponse";
-    private const string UpgradePropertyName = "IsUpgradeRequest";
-    private const string ConnectionPropertyName = "Connection";
-
     private static readonly DiagnosticDescriptor Rule = new(
         DiagnosticIds.LeakedUpgradeConnection,
         title: "Upgrade request leaves its connection open",
@@ -38,7 +34,7 @@ public sealed class UpgradeConnectionAnalyzer : DiagnosticAnalyzer
             + "(SendResponseAsync, which declines the upgrade and closes), or disposing "
             + "Connection leaves a socket open that nothing will ever read or close. Nothing "
             + "fails in development; the symptom in production is socket exhaustion.",
-        helpLinkUri: DiagnosticIds.HelpLinkBase + "shlrx002");
+        helpLinkUri: DiagnosticIds.HelpLink(DiagnosticIds.LeakedUpgradeConnection));
 
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = ImmutableArray.Create(Rule);
@@ -51,7 +47,7 @@ public sealed class UpgradeConnectionAnalyzer : DiagnosticAnalyzer
 
         context.RegisterCompilationStartAction(static compilationStart =>
         {
-            var requestType = compilationStart.Compilation.GetTypeByMetadataName(RequestMetadataName);
+            var requestType = compilationStart.Compilation.GetTypeByMetadataName(ListenerApi.RequestTypeMetadataName);
 
             if (requestType is null)
             {
@@ -73,23 +69,25 @@ public sealed class UpgradeConnectionAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        // Which side of the branch the upgrade request takes. A negated test with no else
-        // means the upgrade case is the fall-through.
-        var upgradePath = test.IsNegated ? conditional.WhenFalse : conditional.WhenTrue;
+        var (requestSymbol, isNegated) = test;
 
-        var scanned = CollectUpgradePathOperations(conditional, upgradePath);
-
-        if (scanned is null)
+        // Everything the rule can see has to live in one function body. A conditional nested
+        // in a loop, a try, a using or any other construct has continuations this walk does
+        // not follow — an enclosing finally that disposes, for one — so it is left alone.
+        if (conditional.Parent is not IBlockOperation body
+            || body.Parent is not (IMethodBodyOperation or IAnonymousFunctionOperation or ILocalFunctionOperation))
         {
             return;
         }
 
-        foreach (var operation in scanned)
+        // Which side of the branch the upgrade request takes. A negated test with no else
+        // means the upgrade case is the fall-through.
+        var upgradePath = isNegated ? conditional.WhenFalse : conditional.WhenTrue;
+
+        if (UpgradePathOperations(body, conditional, upgradePath)
+            .Any(operation => RetainsRequest(operation, requestSymbol)))
         {
-            if (RetainsRequest(operation, test.RequestSymbol))
-            {
-                return;
-            }
+            return;
         }
 
         context.ReportDiagnostic(Diagnostic.Create(Rule, conditional.Condition.Syntax.GetLocation()));
@@ -99,7 +97,9 @@ public sealed class UpgradeConnectionAnalyzer : DiagnosticAnalyzer
     /// Matches <c>request.IsUpgradeRequest</c> and <c>!request.IsUpgradeRequest</c> where the
     /// message is a plain local or parameter. Anything more involved is left alone.
     /// </summary>
-    private static UpgradeTest? GetUpgradeTest(IOperation condition, INamedTypeSymbol requestType)
+    private static (ISymbol Request, bool IsNegated)? GetUpgradeTest(
+        IOperation condition,
+        INamedTypeSymbol requestType)
     {
         var isNegated = false;
 
@@ -109,73 +109,74 @@ public sealed class UpgradeConnectionAnalyzer : DiagnosticAnalyzer
             condition = negation.Operand;
         }
 
-        if (condition is not IPropertyReferenceOperation { Property.Name: UpgradePropertyName } property
+        if (condition is not IPropertyReferenceOperation { Property.Name: ListenerApi.UpgradeProperty } property
             || !SymbolEqualityComparer.Default.Equals(property.Property.ContainingType, requestType))
         {
             return null;
         }
 
-        var requestSymbol = property.Instance switch
-        {
-            IParameterReferenceOperation parameter => (ISymbol)parameter.Parameter,
-            ILocalReferenceOperation local => local.Local,
-            _ => null
-        };
-
-        return requestSymbol is null ? null : new UpgradeTest(requestSymbol, isNegated);
+        return GetReferencedSymbol(property.Instance) is { } request ? (request, isNegated) : null;
     }
 
     /// <summary>
-    /// The operations the upgrade path runs before leaving the enclosing function, or
-    /// <see langword="null"/> when that cannot be determined locally.
+    /// Everything the upgrade path runs while the message is still its responsibility.
+    /// Lazy, because the answer is usually settled by the first handling it finds.
     /// </summary>
-    private static List<IOperation>? CollectUpgradePathOperations(
+    private static IEnumerable<IOperation> UpgradePathOperations(
+        IBlockOperation body,
         IConditionalOperation conditional,
         IOperation? upgradePath)
     {
-        var operations = new List<IOperation>();
+        var conditionalIndex = body.Operations.IndexOf(conditional);
 
-        if (upgradePath is not null)
+        for (var i = 0; i < body.Operations.Length; i++)
         {
-            operations.AddRange(upgradePath.DescendantsAndSelf());
+            var statement = body.Operations[i];
 
-            // A branch that returns or throws never reaches the code after the conditional,
-            // so what follows cannot be its rescue.
-            if (Exits(upgradePath))
+            // Everything before the test has already run on this path — taking ownership of
+            // the connection up front is a normal way to make every exit safe. A local
+            // function counts wherever it is written, since it is in scope throughout.
+            var reachable = i < conditionalIndex || statement is ILocalFunctionOperation;
+
+            // What follows the test is only reached when the branch falls through to it.
+            reachable |= i > conditionalIndex && !Exits(upgradePath);
+
+            if (!reachable)
             {
-                return operations;
+                continue;
+            }
+
+            foreach (var operation in statement.DescendantsAndSelf())
+            {
+                yield return operation;
             }
         }
 
-        // Otherwise the upgrade path continues after the conditional, and anything there
-        // still counts. Only a conditional sitting directly in the function body is followed;
-        // inside a loop or a nested block the continuation is no longer plainly visible.
-        if (conditional.Parent is not IBlockOperation block
-            || block.Parent is not (IMethodBodyOperation or IAnonymousFunctionOperation or ILocalFunctionOperation))
+        if (upgradePath is null)
         {
-            return null;
+            yield break;
         }
 
-        var index = block.Operations.IndexOf(conditional);
-
-        if (index < 0)
+        foreach (var operation in upgradePath.DescendantsAndSelf())
         {
-            return null;
+            yield return operation;
         }
-
-        for (var i = index + 1; i < block.Operations.Length; i++)
-        {
-            operations.AddRange(block.Operations[i].DescendantsAndSelf());
-        }
-
-        return operations;
     }
 
-    private static bool Exits(IOperation branch) => branch switch
+    /// <summary>Whether this branch leaves the enclosing function rather than falling through.</summary>
+    private static bool Exits(IOperation? branch) => branch switch
     {
         IReturnOperation or IThrowOperation => true,
         IBlockOperation { Operations.Length: > 0 } block => Exits(block.Operations[block.Operations.Length - 1]),
         _ => false
+    };
+
+    /// <summary>The local or parameter an operation refers to, if it is that simple.</summary>
+    private static ISymbol? GetReferencedSymbol(IOperation? operation) => operation switch
+    {
+        IParameterReferenceOperation parameter => parameter.Parameter,
+        ILocalReferenceOperation local => local.Local,
+        _ => null
     };
 
     /// <summary>
@@ -186,25 +187,12 @@ public sealed class UpgradeConnectionAnalyzer : DiagnosticAnalyzer
     /// </summary>
     private static bool RetainsRequest(IOperation operation, ISymbol requestSymbol)
     {
-        var referenced = operation switch
-        {
-            IParameterReferenceOperation parameter => (ISymbol)parameter.Parameter,
-            ILocalReferenceOperation local => local.Local,
-            _ => null
-        };
-
-        if (referenced is null || !SymbolEqualityComparer.Default.Equals(referenced, requestSymbol))
+        if (GetReferencedSymbol(operation) is not { } referenced
+            || !SymbolEqualityComparer.Default.Equals(referenced, requestSymbol))
         {
             return false;
         }
 
-        return operation.Parent is not IPropertyReferenceOperation { Property.Name: not ConnectionPropertyName };
-    }
-
-    private readonly struct UpgradeTest(ISymbol requestSymbol, bool isNegated)
-    {
-        internal ISymbol RequestSymbol { get; } = requestSymbol;
-
-        internal bool IsNegated { get; } = isNegated;
+        return operation.Parent is not IPropertyReferenceOperation { Property.Name: not ListenerApi.ConnectionProperty };
     }
 }

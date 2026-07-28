@@ -7,17 +7,11 @@ namespace SimpleHttpListener.Rx.Analyzers.Tests.TestHelpers;
 /// <remarks>
 /// The real assembly targets net10.0 and the analyzer test harness tops out at net9.0
 /// reference assemblies, so it cannot be referenced from a test compilation directly.
-/// <see cref="ListenerApiGuardTests"/> checks this stub against the real type by reflection,
-/// so a rename in the library cannot leave the analyzer quietly matching nothing.
+/// <see cref="ListenerApiGuardTests"/> asserts the names the rules match on against the real
+/// types, which is what keeps this stub from drifting away from them unnoticed.
 /// </remarks>
 internal static class ListenerStub
 {
-    internal const string RequestTypeMetadataName = "SimpleHttpListener.Rx.Model.HttpRequestResponse";
-    internal const string UpgradePropertyName = "IsUpgradeRequest";
-    internal const string ConnectionPropertyName = "Connection";
-    internal const string AcceptWebSocketMethodName = "AcceptWebSocketAsync";
-    internal const string SendResponseMethodName = "SendResponseAsync";
-
     internal const string Source = """
         using System;
         using System.Threading;

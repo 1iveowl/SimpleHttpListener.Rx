@@ -8,6 +8,21 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!--
+      One version for both packages. The library takes a dependency on the analyzers at
+      exactly this version, so bumping them apart would break consumer restore.
+    -->
+    <Version>7.5.0</Version>
+    <Authors>1iveowl</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/1iveowl/SimpleHttpListener.Rx</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/1iveowl/SimpleHttpListener.Rx</RepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- The Roslyn API the analyzers compile against; see the README for the SDK floor. -->
+    <RoslynVersion>4.8.0</RoslynVersion>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(CI)' == 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>

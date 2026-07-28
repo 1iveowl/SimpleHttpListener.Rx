@@ -17,4 +17,13 @@
     <ProjectReference Include="../../src/SimpleHttpListener.Rx/SimpleHttpListener.Rx.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Dogfooding: analyzer assets are private across a project reference, so the rules
+         have to be asked for explicitly to apply to this project's own code. -->
+    <ProjectReference Include="../../src/SimpleHttpListener.Rx.Analyzers/SimpleHttpListener.Rx.Analyzers.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../src/SimpleHttpListener.Rx.Analyzers.CodeFixes/SimpleHttpListener.Rx.Analyzers.CodeFixes.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
 </Project>
