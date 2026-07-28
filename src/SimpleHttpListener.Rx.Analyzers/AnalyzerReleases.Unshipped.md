@@ -6,3 +6,4 @@
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 SHLRX001 | Usage | Warning | AsyncSubscriberAnalyzer, [Documentation](https://github.com/1iveowl/SimpleHttpListener.Rx#shlrx001)
+SHLRX002 | Reliability | Warning | UpgradeConnectionAnalyzer, [Documentation](https://github.com/1iveowl/SimpleHttpListener.Rx#shlrx002)

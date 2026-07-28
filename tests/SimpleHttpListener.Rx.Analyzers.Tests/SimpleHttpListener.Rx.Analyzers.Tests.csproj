@@ -17,6 +17,8 @@
   <ItemGroup>
     <ProjectReference Include="../../src/SimpleHttpListener.Rx.Analyzers/SimpleHttpListener.Rx.Analyzers.csproj" />
     <ProjectReference Include="../../src/SimpleHttpListener.Rx.Analyzers.CodeFixes/SimpleHttpListener.Rx.Analyzers.CodeFixes.csproj" />
+    <!-- Referenced only so ListenerApiGuardTests can check the stub against the real API. -->
+    <ProjectReference Include="../../src/SimpleHttpListener.Rx/SimpleHttpListener.Rx.csproj" />
   </ItemGroup>
 
 </Project>

@@ -78,6 +78,22 @@ internal static class RxVerifier
         return MetadataReference.CreateFromImage(peStream.ToArray());
     }
 
+    /// <summary>
+    /// Runs against a compilation that also contains <see cref="ListenerStub"/>, for the
+    /// rules that key on the listener's own types.
+    /// </summary>
+    internal static Task VerifyAnalyzerWithListenerAsync<TAnalyzer>(string source)
+        where TAnalyzer : DiagnosticAnalyzer, new()
+    {
+        var test = new CSharpAnalyzerTest<TAnalyzer, DefaultVerifier>
+        {
+            TestState = { Sources = { source, ListenerStub.Source } },
+            ReferenceAssemblies = WithRx
+        };
+
+        return test.RunAsync();
+    }
+
     private static Task RunAnalyzerAsync<TAnalyzer>(
         string source,
         ReferenceAssemblies referenceAssemblies,
