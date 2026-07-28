@@ -238,6 +238,133 @@ Notes and limitations:
   `samples/SimpleHttpListener.Rx.Sample.WebSocketClient` project connects it to the server
   sample's echo endpoint.
 
+## Analyzers (7.5.0+)
+
+Two mistakes this library makes easy are hard to see in a code review and invisible at
+runtime until production: subscribing with an `async` handler, and letting an upgraded
+connection go unowned. From 7.5.0 both are build warnings.
+
+The analyzers arrive with the package — no install step, and they reach you through
+intermediate libraries too, so referencing something built on SimpleHttpListener.Rx is
+enough. They can also be referenced on their own as
+[SimpleHttpListener.Rx.Analyzers](https://www.nuget.org/packages/SimpleHttpListener.Rx.Analyzers)
+if you want the Rx rule without the listener.
+
+They are build-time only: nothing is added to your output, and there is no runtime
+dependency. Both rules are **warnings**, so a build never breaks because of them unless you
+have opted into `TreatWarningsAsErrors` — where a failure is exactly what that flag is for.
+The rules need the .NET 8.0.100 SDK or later; on anything older they simply do not load
+(the compiler says so with `CS8032`) and your build is otherwise unaffected.
+
+<a id="shlrx001"></a>
+
+### SHLRX001 — async delegate passed to `Subscribe`
+
+`Subscribe` takes an `Action<T>`, so an `async` handler passed to it is an `async void`
+method. Three things follow, none of them visible at the call site:
+
+- an exception it throws never reaches your `onError` handler — it is raised on the thread
+  pool, where the usual outcome is a lost error or a crashed process;
+- a second message can start being handled before the first has finished, so ordering is
+  gone;
+- nothing slows the source to the rate the handler can keep up with.
+
+```csharp
+// Warns — and the method-group form warns too, where 'async' is not even visible here:
+xs.Subscribe(async x => await HandleAsync(x));
+xs.Subscribe(HandleAsync);            // async void HandleAsync(int x)
+```
+
+Keep the asynchronous work inside the pipeline instead:
+
+```csharp
+xs.Select(x => Observable.FromAsync(() => HandleAsync(x)))
+  .Concat()     // one at a time, in order — or .Merge() to allow overlap
+  .Subscribe(_ => { }, ex => Log(ex));
+```
+
+Two code fixes are offered for the lambda form, and the choice is yours to make because it
+changes behaviour: **Concat** preserves order and applies backpressure, **Merge** lets
+handlers run concurrently. The method-group form gets the warning but no automatic fix —
+the repair is to change that method's signature, which is not a safe local edit.
+
+The rule fires on `Subscribe` over any `IObservable<T>`, not only on streams from this
+library. If you already run VSTHRD101, MA0147, EPC17 or AsyncFixer03, expect two warnings on
+the same lambda; both are right, and this one additionally catches the method-group form
+that all of those miss.
+
+<a id="shlrx002"></a>
+
+### SHLRX002 — upgrade request leaves its connection open
+
+When a message arrives with `IsUpgradeRequest` set, the listener stops reading that
+connection and hands it to you. A path that walks away without completing the handshake,
+answering the request, or disposing `Connection` leaves a socket that nothing will ever read
+or close. Nothing fails in development; in production it surfaces as socket exhaustion under
+a client that probes for WebSocket support.
+
+```csharp
+requests.Subscribe(request =>
+{
+    if (request.IsUpgradeRequest)     // Warns: this path abandons the connection
+    {
+        return;
+    }
+
+    _ = request.SendResponseAsync(new HttpResponse());
+});
+```
+
+Any of these resolves it — including simply declining, which since 7.5.0 closes the
+connection for you:
+
+```csharp
+if (request.IsUpgradeRequest)
+{
+    _ = request.SendResponseAsync(new HttpResponse { StatusCode = 400 });  // declines and closes
+    // or: await request.AcceptWebSocketAsync();   — completes the handshake
+    // or: request.Connection?.Dispose();          — closes it yourself
+    return;
+}
+```
+
+The rule is deliberately quiet. Proving that every path out of a branch either completed or
+disposed is dataflow analysis across lambdas and methods, and a rule that guesses at it
+produces noise people learn to suppress. So it reports one shape — an upgrade path that
+never touches the message again — and says nothing as soon as the message or its connection
+is passed somewhere, stored, or otherwise leaves its sight. Handing the request to another
+method, the pattern in [WebSockets](#websockets-710) above, is silent by design. It will
+miss real leaks; every warning it does give you is one.
+
+### Turning a rule off
+
+Both rules are meant to be right every time, so the first question when one fires is whether
+it has a point. When it genuinely does not, silence it as narrowly as the situation needs:
+
+```csharp
+#pragma warning disable SHLRX001 // deliberate fire-and-forget; exceptions handled inside
+xs.Subscribe(async x => await HandleAsync(x));
+#pragma warning restore SHLRX001
+```
+
+```ini
+# .editorconfig — per project or per folder, and the same knob tunes severity:
+# 'suggestion' demotes it to an IDE hint, 'error' promotes it to a build failure.
+[*.cs]
+dotnet_diagnostic.SHLRX001.severity = none
+```
+
+```xml
+<!-- Or bluntly, for a whole project -->
+<NoWarn>$(NoWarn);SHLRX001;SHLRX002</NoWarn>
+```
+
+`.editorconfig` and `NoWarn` are the supported off-switches, and they silence a rule
+completely. Note that `ExcludeAssets="analyzers"` on the package reference does **not** work
+— the analyzers arrive as a dependency whose analyzer assets are deliberately flowed, and
+that setting cannot override it. The assembly still loads when a rule is set to `none`; it
+just has nothing to say.
+
 ### Parse errors
 
 The listener observables never fail because of one bad client. Malformed input or a connection that closes mid-message produces an emission with `HasParsingErrors == true`, and the listener keeps serving other connections.
