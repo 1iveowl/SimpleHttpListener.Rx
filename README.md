@@ -6,6 +6,7 @@
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![System.Reactive](https://img.shields.io/badge/Rx-7.0.0-ff69b4.svg)](https://reactivex.io/)
+[![Native AOT](https://img.shields.io/badge/Native%20AOT-compatible-success.svg)](#native-aot-and-trimming-760)
 
 An Rx-based HTTP listener for TCP, UDP, and UDP multicast traffic.
 
@@ -21,6 +22,7 @@ The library is built with [Reactive Extensions](https://reactivex.io/), exposing
 
 | Version | Highlights |
 | --- | --- |
+| **7.6.0** | [Native AOT and trimming](#native-aot-and-trimming-760): the library is annotated trim- and AOT-compatible, and publishing it into a native binary is verified rather than assumed. |
 | **7.5.0** | [Declining an upgrade no longer leaks the connection](#websockets-710), and [analyzers](#analyzers-750) ship with the package to catch two easy-to-miss misuses at build time. |
 | **7.4.0** | [Listener options](#listener-options-740): opt-in [raw wire capture](#raw-message-capture-740) of each UDP message's bytes as received, and opt-in RFC 9112 §6.3 framing for unframed response bodies. |
 | **7.3.0** | [Reliable stop and restart](#subscription-lifecycle-730): stopping never surfaces as an error, and dispose-then-resubscribe never races the previous teardown. |
@@ -237,6 +239,34 @@ Notes and limitations:
   [WebsocketClientLite.PCL](https://github.com/1iveowl/WebsocketClientLite.PCL) — the
   `samples/SimpleHttpListener.Rx.Sample.WebSocketClient` project connects it to the server
   sample's echo endpoint.
+
+## Native AOT and trimming (7.6.0+)
+
+The library is annotated `IsTrimmable` and `IsAotCompatible`, so a consuming app can publish
+with `PublishAot` or `PublishTrimmed` and get no `IL` warnings from this package.
+
+```xml
+<PublishAot>true</PublishAot>
+```
+
+The annotation is backed by a test rather than a hope. A console app referencing the package
+was published with native AOT and run, exercising the paths most likely to break under
+trimming:
+
+- **TCP** — accept, parse a request, send a response.
+- **WebSockets** — the RFC 6455 handshake through `AcceptWebSocketAsync`, then an echo.
+- **UDP** — datagram parse plus [`LocalEndPoint` resolution](#local-endpoint-of-a-received-datagram-720),
+  which is the interesting one: it looks up network interfaces at runtime, and that is exactly
+  the kind of code trimming tends to break.
+
+All three work in the native binary, and the publish produces no trim or AOT warnings.
+
+Two caveats worth stating plainly. This says nothing about *your* code or your other
+dependencies — trimming is a whole-app property, and the compatible ones here are this
+library, [System.Reactive](https://www.nuget.org/packages/System.Reactive) and
+[HttpMachine.PCL](https://www.nuget.org/packages/HttpMachine.PCL), all of which carry the
+trim annotation. And the [analyzers](#analyzers-750) are irrelevant to it either way: they run
+in the compiler and never reach your output.
 
 ## Analyzers (7.5.0+)
 

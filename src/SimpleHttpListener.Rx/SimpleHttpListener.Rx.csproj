@@ -5,6 +5,8 @@
     <Description>A simple Reactive Extensions (Rx) based HTTP listener for TCP, UDP and multicast, supporting HTTP keep-alive and SSDP-style datagrams.</Description>
     <PackageTags>http;listener;rx;reactive;observable;tcp;udp;multicast;ssdp</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsTrimmable>true</IsTrimmable>
+    <IsAotCompatible>true</IsAotCompatible>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>

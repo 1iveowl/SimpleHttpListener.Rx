@@ -13,7 +13,7 @@
       One version for both packages. The library takes a dependency on the analyzers at
       exactly this version, so bumping them apart would break consumer restore.
     -->
-    <Version>7.5.0</Version>
+    <Version>7.6.0</Version>
     <Authors>1iveowl</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/1iveowl/SimpleHttpListener.Rx</PackageProjectUrl>
