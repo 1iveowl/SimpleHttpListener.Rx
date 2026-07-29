@@ -7,6 +7,7 @@
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![System.Reactive](https://img.shields.io/badge/Rx-7.0.0-ff69b4.svg)](https://reactivex.io/)
 [![Native AOT](https://img.shields.io/badge/Native%20AOT-compatible-success.svg)](#native-aot-and-trimming-760)
+[![Analyzers](https://img.shields.io/badge/analyzers-included-8A2BE2.svg)](#analyzers)
 
 An Rx-based HTTP listener for TCP, UDP, and UDP multicast traffic.
 
